@@ -1,4 +1,7 @@
 from backend.app.ai import resolve_turn
+from backend.app.domain.action import PlayerAction
+from backend.app.domain.context import Scene
+from backend.app.services.context_manager import ContextManager
 
 
 def build_initial_world() -> str:
@@ -8,15 +11,15 @@ def build_initial_world() -> str:
     )
 
 
-def build_initial_scene() -> dict:
-    return {
+def build_initial_scene() -> Scene:
+    return Scene.from_dict({
         "time": "夜晚 21:30",
         "location": "MIX 酒馆",
         "description": (
             "酒馆里很安静，窗外的霓虹招牌时明时暗。吧台后方有一扇狭窄的后门，"
             "门后通向一条没有监控的暗巷。"
         ),
-    }
+    })
 
 
 def build_initial_characters() -> list[dict]:
@@ -42,10 +45,11 @@ def print_scene(scene: dict) -> None:
 
 
 def main() -> None:
-    world = build_initial_world()
-    scene = build_initial_scene()
-    characters = build_initial_characters()
-    recent_summary = ""
+    context = ContextManager(
+        world=build_initial_world(),
+        scene=build_initial_scene(),
+        characters=build_initial_characters(),
+    )
     turn_index = 1
 
     print("CandleTRPG-LAN 命令行跑团演示")
@@ -54,7 +58,7 @@ def main() -> None:
     while True:
         print()
         print(f"===== 第 {turn_index} 回合 =====")
-        print_scene(scene)
+        print_scene(context.scene)
 
         action_text = input("\n请输入你的行动：").strip()
         if action_text.lower() in {"q", "quit", "exit"}:
@@ -65,37 +69,49 @@ def main() -> None:
             print("行动不能为空。")
             continue
 
-        actions = [
+        actions: list[PlayerAction] = [
             {
                 "player_id": "player_001",
-                "character_name": characters[0]["name"],
+                "character_name": context.characters[0]["name"],
                 "action_text": action_text,
             }
         ]
 
+        ai_context = context.build_ai_context()
+
         try:
             result = resolve_turn(
-                world=world,
-                scene=scene,
-                characters=characters,
+                world=ai_context["world"],
+                scene=ai_context["scene"],
+                characters=ai_context["characters"],
+                history=ai_context["history"],
                 actions=actions,
-                recent_summary=recent_summary,
             )
         except Exception as exc:
             print(f"\nAI 结算失败：{exc}")
             continue
 
         narration = result.get("narration", "").strip()
+        scene = result.get("scene", "")
         if not narration:
             print("\nAI 返回了空旁白。")
             continue
 
-        print()
-        print("----- 主持人 -----")
+        # print()
+        # print("----- 主持人 -----")
         print(narration)
 
-        recent_summary = narration[-500:]
-        scene["description"] = narration
+        context.record_turn(
+            turn_index=turn_index,
+            actions=actions,
+            narration=narration,
+            scene=scene,
+        )
+
+        print("历史：：：：：：：：")
+        print(context.turn_history)
+        print("：：：：：：：：：：")
+
         turn_index += 1
 
 
