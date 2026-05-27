@@ -22,8 +22,22 @@ async function request(path, options = {}) {
 }
 
 export const roomApi = {
+  createRoom(roomId, payload) {
+    return request(`/api/rooms/${encodeURIComponent(roomId)}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
   getState(roomId) {
     return request(`/api/rooms/${encodeURIComponent(roomId)}/state`);
+  },
+
+  importWorld(roomId, payload) {
+    return request(`/api/rooms/${encodeURIComponent(roomId)}/world`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 
   joinRoom(roomId, payload) {
