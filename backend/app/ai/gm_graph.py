@@ -121,6 +121,7 @@ def build_prompt(state: GMState) -> dict[str, Any]:
 
 【历史回合】
 {_format_history(history)}
+历史回合的结构是玩家当前回合的动作+当前回合行动后的结果
 
 {_output_rules()}
 """.strip()

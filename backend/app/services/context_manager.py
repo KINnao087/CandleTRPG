@@ -20,6 +20,9 @@ class ContextManager:
             "history": self.turn_history,
         }
 
+    def update_scene(self, scene: Scene):
+        self.scene = scene
+
     def record_turn(self, turn_index: int, actions: List[PlayerAction], narration: str, scene: Scene):
         self.turn_history.append({
             "turn_index": turn_index,
@@ -27,5 +30,5 @@ class ContextManager:
             "narration": narration,
             "scene": scene,
         })
-        self.scene = scene
 
+        self.update_scene(scene)

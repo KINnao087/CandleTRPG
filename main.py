@@ -1,7 +1,7 @@
-from backend.app.ai import resolve_turn
 from backend.app.domain.action import PlayerAction
 from backend.app.domain.context import Scene
 from backend.app.services.context_manager import ContextManager
+from backend.app.services.turn_manager import TurnManager
 
 
 def build_initial_world() -> str:
@@ -37,7 +37,7 @@ def build_initial_characters() -> list[dict]:
     ]
 
 
-def print_scene(scene: dict) -> None:
+def print_scene(scene: Scene) -> None:
     print()
     print(f"时间：{scene.get('time', '未知')}")
     print(f"地点：{scene.get('location', '未知')}")
@@ -50,14 +50,14 @@ def main() -> None:
         scene=build_initial_scene(),
         characters=build_initial_characters(),
     )
-    turn_index = 1
+    turn_manager = TurnManager(context)
 
     print("CandleTRPG-LAN 命令行跑团演示")
     print("输入 q 退出。")
 
     while True:
         print()
-        print(f"===== 第 {turn_index} 回合 =====")
+        print(f"===== 第 {turn_manager.turn_index} 回合 =====")
         print_scene(context.scene)
 
         action_text = input("\n请输入你的行动：").strip()
@@ -77,42 +77,16 @@ def main() -> None:
             }
         ]
 
-        ai_context = context.build_ai_context()
-
-        try:
-            result = resolve_turn(
-                world=ai_context["world"],
-                scene=ai_context["scene"],
-                characters=ai_context["characters"],
-                history=ai_context["history"],
-                actions=actions,
-            )
-        except Exception as exc:
-            print(f"\nAI 结算失败：{exc}")
-            continue
+        result = turn_manager.resolve_turn(actions)
 
         narration = result.get("narration", "").strip()
-        scene = result.get("scene", "")
         if not narration:
             print("\nAI 返回了空旁白。")
             continue
 
-        # print()
-        # print("----- 主持人 -----")
+        print()
+        print("----- 主持人 -----")
         print(narration)
-
-        context.record_turn(
-            turn_index=turn_index,
-            actions=actions,
-            narration=narration,
-            scene=scene,
-        )
-
-        print("历史：：：：：：：：")
-        print(context.turn_history)
-        print("：：：：：：：：：：")
-
-        turn_index += 1
 
 
 if __name__ == "__main__":
