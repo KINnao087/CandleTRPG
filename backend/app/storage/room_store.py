@@ -1,6 +1,7 @@
 from typing import Any
 
 from backend.app.domain.action import PlayerAction
+from backend.app.domain.context import World
 from backend.app.domain.room import PlayerInfo
 from backend.app.services.turn_manager import TurnManager
 
@@ -12,7 +13,7 @@ class RoomRuntimeInfo:
     actions: dict[int, PlayerAction]
     player_status: dict[int, bool]
     timeline: list[dict[str, Any]]
-    world: dict[str, str]
+    world: World
     turn_manager: TurnManager
 
     def __init__(
@@ -20,12 +21,12 @@ class RoomRuntimeInfo:
         room_id: str,
         phase: str,
         turn_manager: TurnManager,
-        world: dict[str, str] | None = None,
+        world: World | None = None,
     ):
         self.room_id = room_id
         self.phase = phase
         self.turn_manager = turn_manager
-        self.world = world or {"title": "", "setting": ""}
+        self.world = world or World(title="", setting="")
         self.players = {}
         self.actions = {}
         self.player_status = {}
@@ -78,8 +79,15 @@ class RoomRuntimeInfo:
             "room_id": self.room_id,
             "turn_index": self.turn_manager.turn_index,
             "phase": self.phase,
-            "world": self.world,
-            "scene": context.scene,
+            "world": {
+                "title": self.world.title,
+                "setting": self.world.setting,
+            },
+            "scene": {
+                "time": context.scene.get("time", ""),
+                "location": context.scene.get("location", ""),
+                "description": context.scene.get("description", ""),
+            },
             "players": [
                 {
                     "id": self._format_player_id(player.id),
@@ -91,13 +99,32 @@ class RoomRuntimeInfo:
                 }
                 for player in self.players.values()
             ],
-            "characters": context.characters,
+            "characters": self._format_characters(context.characters),
             "timeline": self.timeline,
         }
 
     @staticmethod
     def _format_player_id(player_id: int) -> str:
         return f"player_{player_id:03d}"
+
+    @staticmethod
+    def _format_characters(characters: list[Any]) -> list[dict[str, Any]]:
+        result = []
+        for index, character in enumerate(characters, start=1):
+            if isinstance(character, dict):
+                result.append(character)
+            else:
+                result.append({
+                    "id": f"char_{index:03d}",
+                    "player_id": f"player_{index:03d}",
+                    "name": str(character),
+                    "status": {
+                        "hp": 100,
+                        "conditions": [],
+                    },
+                    "inventory": [],
+                })
+        return result
 
 
 class RoomStore:

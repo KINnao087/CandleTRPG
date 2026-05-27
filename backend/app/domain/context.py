@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Any, List, Mapping, TypedDict
 
 from backend.app.domain.action import PlayerAction
@@ -8,6 +9,11 @@ class TurnHistory(TypedDict):
     actions: List[PlayerAction]
     narration: str
     scene: str
+
+@dataclass
+class World:
+    title: str
+    setting: str
 
 class Scene(dict):
     @classmethod

@@ -1,10 +1,17 @@
 from typing import List, TypedDict
 
+from regex._regex_core import Character
+
 from backend.app.domain.action import PlayerAction
-from backend.app.domain.context import TurnHistory, Scene
+from backend.app.domain.context import TurnHistory, Scene, World
 
 
 class ContextManager:
+    world: World
+    scene: Scene
+    characters: List[Character]
+    turn_history: List[TurnHistory]
+
     def __init__(self, world, scene, characters):
         self.world = world
         self.scene = scene
