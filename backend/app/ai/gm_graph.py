@@ -143,11 +143,16 @@ def call_llm(state: GMState) -> dict[str, Any]:
     llm = get_llm()
     response = llm.invoke(prompt)
     raw_response = response.content
-    parsed = json.loads(raw_response)
-    scene_update = parsed.get("scene_update", {})
 
     return {
         "raw_response": raw_response,
+    }
+
+def parse_llm_output(state: GMState) -> dict[str, Any]:
+    parsed = json.loads(state["raw_response"])
+
+    scene_update = parsed.get("scene_update", {})
+    return {
         "narration": parsed.get("narration", ""),
         "scene_update": {
             "time": scene_update.get("time", ""),
@@ -162,9 +167,11 @@ def build_gm_graph():
 
     graph.add_node("build_prompt", build_prompt)
     graph.add_node("call_llm", call_llm)
+    graph.add_node("parse_llm_output", parse_llm_output)
 
     graph.add_edge(START, "build_prompt")
     graph.add_edge("build_prompt", "call_llm")
-    graph.add_edge("call_llm", END)
+    graph.add_edge("call_llm", "parse_llm_output")
+    graph.add_edge("parse_llm_output", END)
 
     return graph.compile()
