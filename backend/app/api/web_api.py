@@ -210,11 +210,11 @@ def player_action(room_id: str, payload: PlayerActionRequest):
     if player_id not in room.players:
         raise HTTPException(status_code=404, detail="player not found")
 
-    action: PlayerAction = {
-        "player_id": payload.player_id,
-        "character_name": payload.character_name,
-        "action_text": payload.action_text,
-    }
+    action = PlayerAction(
+        player_id=payload.player_id,
+        character_name=payload.character_name,
+        action_text=payload.action_text,
+    )
     room.player_action(player_id, action)
     return room.to_room_state()
 
@@ -241,22 +241,9 @@ def resolve_turn(payload: HostResolveRequest):
         raise HTTPException(status_code=404, detail="room not found")
 
     if payload.force:
-        room.phase = "resolving"
-        turn_index = room.turn_manager.turn_index
-        result = room.turn_manager.resolve_turn(list(room.actions.values()))
-        room.timeline.insert(0, {
-            "id": f"event_{turn_index:03d}",
-            "type": "turn_resolved",
-            "title": f"第 {turn_index} 回合结算",
-            "content": result.get("narration", ""),
-            "timestamp": result.get("scene", {}).get("time", ""),
-        })
-        room.actions.clear()
-        for player_id in room.player_status:
-            room.player_status[player_id] = False
-        room.phase = "planning"
+        room.resolve_turn(host_note=payload.host_note, force=True)
     else:
-        resolved = room.try_resolve_turn()
+        resolved = room.try_resolve_turn(host_note=payload.host_note)
         if not resolved:
             raise HTTPException(status_code=409, detail="not all players are ready")
 

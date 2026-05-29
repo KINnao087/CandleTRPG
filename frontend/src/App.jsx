@@ -41,6 +41,12 @@ const demoState = {
       name: "林烛",
       status: { hp: 85, conditions: [] },
       inventory: ["终端", "短刀", "急救喷雾"],
+      abilities: [
+        {
+          name: "飞行",
+          description: "可以进行不超过音速的低空飞行。",
+        },
+      ],
     },
   ],
   timeline: [
@@ -62,6 +68,14 @@ const phaseLabels = {
   review: "房主审核",
 };
 
+const themeOptions = [
+  { id: "apple", label: "苹果" },
+  { id: "cyberBlue", label: "蓝紫赛博朋克" },
+  { id: "cyberRed", label: "红黑赛博朋克" },
+  { id: "customWhite", label: "白底自定义" },
+  { id: "customGray", label: "灰底自定义" },
+];
+
 function generateRoomId() {
   return `room_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -70,8 +84,20 @@ function getCurrentPlayer(players, playerId) {
   return players.find((player) => player.id === playerId) || players[0];
 }
 
-function mergeRoomState(current, next) {
-  if (!next || typeof next !== "object") {
+function getRoomStatePayload(response) {
+  if (!response || typeof response !== "object") {
+    return null;
+  }
+
+  return response.room_state && typeof response.room_state === "object"
+    ? response.room_state
+    : response;
+}
+
+function mergeRoomState(current, response) {
+  const next = getRoomStatePayload(response);
+
+  if (!next) {
     return current;
   }
 
@@ -82,7 +108,7 @@ function mergeRoomState(current, next) {
     scene: { ...current.scene, ...(next.scene || {}) },
     players: next.players || current.players,
     characters: next.characters || current.characters,
-    timeline: next.timeline || current.timeline,
+    timeline: Array.isArray(next.timeline) ? next.timeline : current.timeline,
   };
 }
 
@@ -99,6 +125,263 @@ function Field({ label, children }) {
   );
 }
 
+function normalizeSubAbilities(ability) {
+  const rawSubAbilities = ability?.sub_ability ?? ability?.sub_abilities ?? [];
+
+  if (Array.isArray(rawSubAbilities)) {
+    return rawSubAbilities;
+  }
+
+  if (typeof rawSubAbilities === "string" && rawSubAbilities.trim()) {
+    return [{ name: rawSubAbilities.trim() }];
+  }
+
+  if (rawSubAbilities && typeof rawSubAbilities === "object") {
+    return Object.entries(rawSubAbilities).map(([name, value]) =>
+      value && typeof value === "object"
+        ? { name, ...value }
+        : { name, description: String(value ?? "") },
+    );
+  }
+
+  return [];
+}
+
+function isMarkdownBlockStart(line) {
+  return (
+    /^```/.test(line) ||
+    /^#{1,4}\s+/.test(line) ||
+    /^>\s?/.test(line) ||
+    /^\s*[-*+]\s+/.test(line) ||
+    /^\s*\d+[.)]\s+/.test(line)
+  );
+}
+
+function isSafeMarkdownUrl(url) {
+  return /^(https?:|mailto:|tel:|\/|#)/i.test(url.trim());
+}
+
+function renderInlineMarkdown(text, keyPrefix = "inline") {
+  const value = String(text ?? "");
+  const nodes = [];
+  let index = 0;
+
+  function pushText(end) {
+    if (end > index) {
+      nodes.push(value.slice(index, end));
+      index = end;
+    }
+  }
+
+  while (index < value.length) {
+    if (value.startsWith("`", index)) {
+      const end = value.indexOf("`", index + 1);
+      if (end > index) {
+        nodes.push(<code key={`${keyPrefix}-code-${index}`}>{value.slice(index + 1, end)}</code>);
+        index = end + 1;
+        continue;
+      }
+    }
+
+    if (value.startsWith("**", index)) {
+      const end = value.indexOf("**", index + 2);
+      if (end > index) {
+        nodes.push(
+          <strong key={`${keyPrefix}-strong-${index}`}>
+            {renderInlineMarkdown(value.slice(index + 2, end), `${keyPrefix}-strong-${index}`)}
+          </strong>,
+        );
+        index = end + 2;
+        continue;
+      }
+    }
+
+    if (value.startsWith("*", index)) {
+      const end = value.indexOf("*", index + 1);
+      if (end > index) {
+        nodes.push(
+          <em key={`${keyPrefix}-em-${index}`}>
+            {renderInlineMarkdown(value.slice(index + 1, end), `${keyPrefix}-em-${index}`)}
+          </em>,
+        );
+        index = end + 1;
+        continue;
+      }
+    }
+
+    if (value.startsWith("[", index)) {
+      const textEnd = value.indexOf("]", index + 1);
+      const urlStart = textEnd >= 0 ? value.indexOf("(", textEnd) : -1;
+      const urlEnd = urlStart >= 0 ? value.indexOf(")", urlStart) : -1;
+      if (textEnd > index && urlStart === textEnd + 1 && urlEnd > urlStart) {
+        const label = value.slice(index + 1, textEnd);
+        const url = value.slice(urlStart + 1, urlEnd);
+        nodes.push(
+          isSafeMarkdownUrl(url) ? (
+            <a key={`${keyPrefix}-link-${index}`} href={url} target="_blank" rel="noreferrer">
+              {renderInlineMarkdown(label, `${keyPrefix}-link-${index}`)}
+            </a>
+          ) : (
+            label
+          ),
+        );
+        index = urlEnd + 1;
+        continue;
+      }
+    }
+
+    const nextMarkers = ["`", "**", "*", "["]
+      .map((marker) => value.indexOf(marker, index + 1))
+      .filter((position) => position > -1);
+    pushText(nextMarkers.length ? Math.min(...nextMarkers) : value.length);
+  }
+
+  return nodes;
+}
+
+function MarkdownText({ text, fallback = "暂无内容。", className = "" }) {
+  const content = String(text || fallback).trim();
+
+  if (!content) {
+    return <div className={`markdown-text ${className}`.trim()}>{fallback}</div>;
+  }
+
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const blocks = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+
+    const fenceMatch = line.match(/^```(.*)$/);
+    if (fenceMatch) {
+      const codeLines = [];
+      index += 1;
+      while (index < lines.length && !/^```/.test(lines[index])) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+      index += 1;
+      blocks.push(
+        <pre key={`code-${blocks.length}`}>
+          <code>{codeLines.join("\n")}</code>
+        </pre>,
+      );
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,4})\s+(.+)$/);
+    if (headingMatch) {
+      const HeadingTag = `h${headingMatch[1].length + 2}`;
+      blocks.push(
+        <HeadingTag key={`heading-${blocks.length}`}>
+          {renderInlineMarkdown(headingMatch[2], `heading-${blocks.length}`)}
+        </HeadingTag>,
+      );
+      index += 1;
+      continue;
+    }
+
+    if (/^>\s?/.test(line)) {
+      const quoteLines = [];
+      while (index < lines.length && /^>\s?/.test(lines[index])) {
+        quoteLines.push(lines[index].replace(/^>\s?/, ""));
+        index += 1;
+      }
+      blocks.push(
+        <blockquote key={`quote-${blocks.length}`}>
+          <MarkdownText text={quoteLines.join("\n")} />
+        </blockquote>,
+      );
+      continue;
+    }
+
+    const unorderedMatch = line.match(/^\s*[-*+]\s+(.+)$/);
+    const orderedMatch = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (unorderedMatch || orderedMatch) {
+      const ordered = Boolean(orderedMatch);
+      const items = [];
+      while (index < lines.length) {
+        const itemMatch = ordered
+          ? lines[index].match(/^\s*\d+[.)]\s+(.+)$/)
+          : lines[index].match(/^\s*[-*+]\s+(.+)$/);
+        if (!itemMatch) break;
+        items.push(itemMatch[1]);
+        index += 1;
+      }
+      const ListTag = ordered ? "ol" : "ul";
+      blocks.push(
+        <ListTag key={`list-${blocks.length}`}>
+          {items.map((item, itemIndex) => (
+            <li key={`${blocks.length}-${itemIndex}`}>
+              {renderInlineMarkdown(item, `list-${blocks.length}-${itemIndex}`)}
+            </li>
+          ))}
+        </ListTag>,
+      );
+      continue;
+    }
+
+    const paragraphLines = [];
+    while (index < lines.length && lines[index].trim() && !isMarkdownBlockStart(lines[index])) {
+      paragraphLines.push(lines[index].trim());
+      index += 1;
+    }
+    blocks.push(
+      <p key={`paragraph-${blocks.length}`}>
+        {renderInlineMarkdown(paragraphLines.join(" "), `paragraph-${blocks.length}`)}
+      </p>,
+    );
+  }
+
+  return <div className={`markdown-text ${className}`.trim()}>{blocks}</div>;
+}
+
+function ThemeSwitcher({ theme, setTheme, customColor, setCustomColor }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const usesCustomColor = theme === "customWhite" || theme === "customGray";
+
+  return (
+    <div className="theme-switcher">
+      <button type="button" className="theme-toggle" onClick={() => setIsOpen((value) => !value)}>
+        主题
+      </button>
+      {isOpen && (
+        <div className="theme-menu">
+          <strong>界面主题</strong>
+          <div className="theme-options">
+            {themeOptions.map((option) => (
+              <button
+                type="button"
+                className={theme === option.id ? "theme-option active" : "theme-option"}
+                key={option.id}
+                onClick={() => setTheme(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {usesCustomColor && (
+            <label className="theme-color">
+              <span>自定义颜色</span>
+              <input
+                type="color"
+                value={customColor}
+                onChange={(event) => setCustomColor(event.target.value)}
+              />
+            </label>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MainMenu({
   roomId,
   setRoomId,
@@ -112,9 +395,13 @@ function MainMenu({
   isBusy,
   onFindRoom,
   onOpenCreate,
+  themeClass,
+  themeStyle,
+  themeSwitcher,
 }) {
   return (
-    <main className="menu-shell">
+    <main className={`menu-shell ${themeClass}`} style={themeStyle}>
+      {themeSwitcher}
       <section className="menu-hero">
         <span className="eyebrow">CandleTRPG LAN</span>
         <h1>烛火跑团</h1>
@@ -191,9 +478,13 @@ function CreateRoomMenu({
   onCreateRoom,
   onBack,
   onImportWorldFile,
+  themeClass,
+  themeStyle,
+  themeSwitcher,
 }) {
   return (
-    <main className="menu-shell create-shell">
+    <main className={`menu-shell create-shell ${themeClass}`} style={themeStyle}>
+      {themeSwitcher}
       <section className="menu-hero">
         <span className="eyebrow">Room Setup</span>
         <h1>创建房间</h1>
@@ -328,14 +619,50 @@ function CharacterPanel({ characters }) {
                 ? character.status.conditions.join("、")
                 : "无异常状态"}
             </p>
-            <div className="tag-list">
-              {(character.inventory || []).map((item) => (
-                <span key={item}>{item}</span>
-              ))}
-            </div>
-          </article>
-        ))}
+              <div className="tag-list">
+                {(character.inventory || []).map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+              {(character.abilities || []).length > 0 && (
+                <div className="ability-list">
+                  <h3>能力</h3>
+                  {character.abilities.map((ability) => (
+                    <div className="ability-item" key={`${character.id}-${ability.name}`}>
+                      <strong>{ability.name}</strong>
+                      {ability.description && <MarkdownText text={ability.description} />}
+                      {normalizeSubAbilities(ability).length > 0 && (
+                        <div className="sub-ability-list">
+                          {normalizeSubAbilities(ability).map((subAbility, index) => (
+                            <div
+                              className="sub-ability-item"
+                              key={`${character.id}-${ability.name}-sub-${subAbility.name || index}`}
+                            >
+                              <strong>{subAbility.name || `子能力 ${index + 1}`}</strong>
+                              {subAbility.description && <MarkdownText text={subAbility.description} />}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+function WorldPanel({ world }) {
+  return (
+    <section className="panel world-panel">
+      <div className="panel-heading">
+        <h2>世界设定</h2>
       </div>
+      <strong>{world?.title || "未命名世界"}</strong>
+      <MarkdownText text={world?.setting} fallback="暂无世界设定。" />
     </section>
   );
 }
@@ -348,12 +675,15 @@ function Timeline({ events }) {
       </div>
 
       <div className="timeline">
-        {events.map((event) => (
-          <article className="timeline-item" key={event.id || `${event.title}-${event.timestamp}`}>
+        {events.map((event, index) => (
+          <article
+            className="timeline-item"
+            key={`${event.id || "timeline"}-${event.title || event.type || "event"}-${event.timestamp || index}-${index}`}
+          >
             <time>{event.timestamp || "刚刚"}</time>
             <div>
               <strong>{event.title || event.type}</strong>
-              <p>{event.content || event.narration || ""}</p>
+              <MarkdownText text={event.content || event.narration} fallback="" />
             </div>
           </article>
         ))}
@@ -416,14 +746,32 @@ function App() {
   const [socketStatus, setSocketStatus] = useState("closed");
   const [notice, setNotice] = useState("请输入用户名、角色名和房间信息。");
   const [isBusy, setIsBusy] = useState(false);
+  const [theme, setTheme] = useState("cyberBlue");
+  const [customColor, setCustomColor] = useState("#2563eb");
 
   const currentPlayer = useMemo(
     () => getCurrentPlayer(roomState.players, playerId),
     [roomState.players, playerId],
   );
 
+  const themeClass = `theme-${theme}`;
+  const themeStyle = { "--custom-color": customColor };
+  const themeSwitcher = (
+    <ThemeSwitcher
+      theme={theme}
+      setTheme={setTheme}
+      customColor={customColor}
+      setCustomColor={setCustomColor}
+    />
+  );
+
   const readyCount = roomState.players.filter((player) => player.ready).length;
   const canResolve = role === "host" && roomState.phase !== "resolving";
+  const latestTimelineEvent = Array.isArray(roomState.timeline) ? roomState.timeline[0] : null;
+  const latestTimelineText =
+    latestTimelineEvent?.content ||
+    latestTimelineEvent?.narration ||
+    "";
 
   useEffect(() => {
     if (screen !== "room" || !roomId) {
@@ -693,20 +1041,43 @@ function App() {
 
   async function toggleReady() {
     const ready = !currentPlayer?.ready;
+
+    if (ready && !actionText.trim()) {
+      setNotice("请先输入本回合行动，再提交并准备。");
+      return;
+    }
+
     setIsBusy(true);
 
     try {
+      if (ready) {
+        const actionPayload = {
+          player_id: playerId,
+          character_name: currentPlayer?.character_name || characterName,
+          action_text: actionText.trim(),
+          turn_index: roomState.turn_index,
+        };
+        const actionState = await roomApi.submitAction(roomId, actionPayload);
+        setRoomState((current) => mergeRoomState(current, actionState));
+      }
+
       const state = await roomApi.updateReady(roomId, { player_id: playerId, ready });
       setRoomState((current) => mergeRoomState(current, state));
-      setNotice(ready ? "已标记准备。" : "已取消准备。");
+      setNotice(ready ? "行动已提交，已标记准备。" : "已取消准备。");
     } catch {
       setRoomState((current) => ({
         ...current,
         players: current.players.map((player) =>
-          player.id === playerId ? { ...player, ready } : player,
+          player.id === playerId
+            ? {
+                ...player,
+                ready,
+                action_text: ready ? actionText.trim() : player.action_text,
+              }
+            : player,
         ),
       }));
-      setNotice(ready ? "已在本地标记准备。" : "已在本地取消准备。");
+      setNotice(ready ? "后端暂不可用，行动和准备状态已暂存在本地界面。" : "已在本地取消准备。");
     } finally {
       setIsBusy(false);
     }
@@ -728,23 +1099,9 @@ function App() {
     } catch {
       setRoomState((current) => ({
         ...current,
-        phase: "review",
-        turn_index: current.turn_index + 1,
-        timeline: [
-          {
-            id: `local_${Date.now()}`,
-            type: "turn_resolved",
-            title: `第 ${current.turn_index} 回合结算`,
-            content: "本地演示：后端接入后这里会显示 AI 主持人的结算文本和状态变更。",
-            timestamp: new Date().toLocaleTimeString("zh-CN", {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-          ...current.timeline,
-        ],
+        phase: "planning",
       }));
-      setNotice("后端暂不可用，已生成本地演示结算。");
+      setNotice("回合结算请求失败，未写入本地伪记录。");
     } finally {
       setIsBusy(false);
     }
@@ -788,6 +1145,9 @@ function App() {
         isBusy={isBusy}
         onFindRoom={findRoom}
         onOpenCreate={openCreateRoom}
+        themeClass={themeClass}
+        themeStyle={themeStyle}
+        themeSwitcher={themeSwitcher}
       />
     );
   }
@@ -815,12 +1175,16 @@ function App() {
           setNotice("已返回主菜单。");
         }}
         onImportWorldFile={importWorldFile}
+        themeClass={themeClass}
+        themeStyle={themeStyle}
+        themeSwitcher={themeSwitcher}
       />
     );
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${themeClass}`} style={themeStyle}>
+      {themeSwitcher}
       <header className="topbar">
         <div>
           <span className="eyebrow">CandleTRPG LAN</span>
@@ -851,6 +1215,7 @@ function App() {
           />
 
           <PlayerList players={roomState.players} />
+          <WorldPanel world={roomState.world} />
           <CharacterPanel characters={roomState.characters} />
         </aside>
 
@@ -861,7 +1226,16 @@ function App() {
               <StatusPill>{roomState.scene.location}</StatusPill>
             </div>
             <h2>{roomState.scene.location}</h2>
-            <p>{roomState.scene.description}</p>
+            <MarkdownText text={roomState.scene.description} fallback="暂无场景描述。" />
+          </section>
+
+          <section className="panel latest-action-panel">
+            <div className="panel-heading">
+              <h2>最新行动记录</h2>
+              <StatusPill>{latestTimelineEvent?.timestamp || "暂无"}</StatusPill>
+            </div>
+            <strong>{latestTimelineEvent?.title || latestTimelineEvent?.type || "暂无记录"}</strong>
+            <MarkdownText text={latestTimelineText} fallback="当前还没有回合结算记录。" />
           </section>
 
           <div className="workspace-grid">
@@ -881,11 +1255,8 @@ function App() {
               />
 
               <div className="button-row">
-                <button type="button" onClick={submitAction} disabled={isBusy || currentPlayer?.ready}>
-                  提交行动
-                </button>
-                <button type="button" className="secondary" onClick={toggleReady} disabled={isBusy}>
-                  {currentPlayer?.ready ? "取消准备" : "准备"}
+                <button type="button" onClick={toggleReady} disabled={isBusy}>
+                  {currentPlayer?.ready ? "取消准备" : "提交并准备"}
                 </button>
               </div>
             </section>

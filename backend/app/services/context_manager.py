@@ -1,7 +1,7 @@
-from typing import Any, List, TypedDict
+from typing import Any, List
 
 from backend.app.domain.action import PlayerAction
-from backend.app.domain.context import TurnHistory, Scene, World
+from backend.app.domain.context import TurnHistory, TurnResult, Scene, World
 from backend.app.domain.room import PlayerInfo
 
 
@@ -35,33 +35,7 @@ class ContextManager:
             if character is None:
                 continue
 
-            status = update.get("status")
-            if isinstance(status, dict):
-                character.status = {
-                    **character.status,
-                    **status,
-                }
-
-            status_delta = update.get("status_delta")
-            if isinstance(status_delta, dict):
-                self._apply_status_delta(character, status_delta)
-
-            inventory = update.get("inventory")
-            if isinstance(inventory, list):
-                character.inventory = list(inventory)
-
-            inventory_add = update.get("inventory_add")
-            if isinstance(inventory_add, list):
-                for item in inventory_add:
-                    if item not in character.inventory:
-                        character.inventory.append(item)
-
-            inventory_remove = update.get("inventory_remove")
-            if isinstance(inventory_remove, list):
-                character.inventory = [
-                    item for item in character.inventory
-                    if item not in inventory_remove
-                ]
+            character.apply_update(update)
 
     def _find_character_for_update(self, update: dict[str, Any]) -> PlayerInfo | None:
         character_id = self._parse_prefixed_id(update.get("character_id"), "char_")
@@ -104,47 +78,21 @@ class ContextManager:
         except ValueError:
             return None
 
-    @staticmethod
-    def _apply_status_delta(character: PlayerInfo, status_delta: dict[str, Any]):
-        for key, value in status_delta.items():
-            if key == "conditions_add" and isinstance(value, list):
-                conditions = list(character.status.get("conditions", []))
-                for condition in value:
-                    if condition not in conditions:
-                        conditions.append(condition)
-                character.status["conditions"] = conditions
-                continue
-
-            if key == "conditions_remove" and isinstance(value, list):
-                conditions = list(character.status.get("conditions", []))
-                character.status["conditions"] = [
-                    condition for condition in conditions
-                    if condition not in value
-                ]
-                continue
-
-            current_value = character.status.get(key)
-            if isinstance(current_value, (int, float)) and isinstance(value, (int, float)):
-                next_value = current_value + value
-                character.status[key] = max(0, next_value) if key == "hp" else next_value
-            else:
-                character.status[key] = value
-
     def record_turn(
         self,
         turn_index: int,
         actions: List[PlayerAction],
-        narration: str,
-        scene: Scene,
-        character_updates: list[dict[str, Any]] | None = None,
+        result: TurnResult,
     ):
-        self.turn_history.append({
-            "turn_index": turn_index,
-            "actions": actions,
-            "narration": narration,
-            "scene": scene,
-            "character_updates": character_updates or [],
-        })
+        self.turn_history.append(
+            TurnHistory(
+                turn_index=turn_index,
+                actions=actions,
+                narration=result.narration,
+                scene=result.scene,
+                character_updates=result.character_updates,
+            )
+        )
 
-        self.apply_character_updates(character_updates)
-        self.update_scene(scene)
+        self.apply_character_updates(result.character_updates)
+        self.update_scene(result.scene)

@@ -10,23 +10,22 @@ class TurnManager:
         self.context_manager = context_manager
         self.turn_index = 1
 
-    def resolve_turn(self, actions: List[PlayerAction]):
+    def resolve_turn(self, actions: List[PlayerAction], host_note: str = ""):
         ai_context = self.context_manager.build_ai_context()
 
-        res = resolve_turn(
+        result = resolve_turn(
             world=ai_context["world"],
             scene=ai_context["scene"],
             characters=ai_context["characters"],
             history=ai_context["history"],
             actions=actions,
+            host_note=host_note,
         )
 
         self.context_manager.record_turn(
             turn_index=self.turn_index,
             actions=actions,
-            narration=res["narration"],
-            scene=res["scene"],
-            character_updates=res.get("character_updates", []),
+            result=result,
         )
         self.turn_index += 1
-        return res
+        return result

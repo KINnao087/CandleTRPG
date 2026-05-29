@@ -47,21 +47,28 @@ class RoomRuntimeInfo:
     def change_player_status(self, player_id: int, status: bool) -> None:
         self.player_status[player_id] = status
 
-    def try_resolve_turn(self) -> bool:
+    def try_resolve_turn(self, host_note: str = "") -> bool:
         for player_id in self.players:
             if not self.player_status.get(player_id, False):
                 return False
 
+        self.resolve_turn(host_note=host_note)
+        return True
+
+    def resolve_turn(self, host_note: str = "", force: bool = False) -> None:
         self.phase = "resolving"
         turn_index = self.turn_manager.turn_index
-        result = self.turn_manager.resolve_turn(list(self.actions.values()))
+        result = self.turn_manager.resolve_turn(
+            actions=self._build_turn_actions(force=force),
+            host_note=host_note,
+        )
 
         self.timeline.insert(0, {
             "id": f"event_{turn_index:03d}",
             "type": "turn_resolved",
             "title": f"第 {turn_index} 回合结算",
-            "content": result.get("narration", ""),
-            "timestamp": result.get("scene", {}).get("time", ""),
+            "content": result.narration,
+            "timestamp": result.scene.time,
         })
 
         self.actions.clear()
@@ -70,7 +77,24 @@ class RoomRuntimeInfo:
             self.player_status[player_id] = False
 
         self.phase = "planning"
-        return True
+
+    def _build_turn_actions(self, force: bool) -> list[PlayerAction]:
+        actions = []
+        for player_id, player in self.players.items():
+            action = self.actions.get(player_id)
+            if action is not None:
+                actions.append(action)
+                continue
+
+            if force:
+                actions.append(
+                    PlayerAction(
+                        player_id=self._format_player_id(player_id),
+                        character_name=player.character_name,
+                        action_text="无动作",
+                    )
+                )
+        return actions
 
     def to_room_state(self) -> dict[str, Any]:
         context = self.turn_manager.context_manager
@@ -95,7 +119,7 @@ class RoomRuntimeInfo:
                     "character_name": player.character_name,
                     "role": "host" if player.is_host else "player",
                     "ready": self.player_status.get(player.id, False),
-                    "action_text": self.actions.get(player.id, {}).get("action_text", ""),
+                    "action_text": self.actions[player.id].action_text if player.id in self.actions else "",
                 }
                 for player in self.players.values()
             ],
@@ -116,6 +140,10 @@ class RoomRuntimeInfo:
                 "name": character.character_name,
                 "status": character.status,
                 "inventory": character.inventory,
+                "abilities": [
+                    ability.to_dict()
+                    for ability in character.abilities
+                ],
             }
             for character in characters
         ]
