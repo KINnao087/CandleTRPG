@@ -6,18 +6,34 @@ from langgraph.graph import END, START, StateGraph
 from backend.app.ai.llm_client import get_llm
 from backend.app.domain.action import PlayerAction
 from backend.app.domain.context import TurnHistory
+from backend.app.domain.room import PlayerInfo
 
 
 class GMState(TypedDict, total=False):
     world: str
     scene: Dict[str, Any]
-    characters: List[Dict[str, Any]]
+    characters: List[PlayerInfo]
     history: List[TurnHistory]
     player_actions: List[PlayerAction]
     prompt: str
     raw_response: str
     narration: str
     scene_update: Dict[str, Any]
+    character_updates: List[Dict[str, Any]]
+
+
+def _format_player_id(player_id: Any) -> str:
+    try:
+        return f"player_{int(player_id):03d}"
+    except (TypeError, ValueError):
+        return str(player_id)
+
+
+def _format_character_id(character_id: Any) -> str:
+    try:
+        return f"char_{int(character_id):03d}"
+    except (TypeError, ValueError):
+        return str(character_id)
 
 
 def _format_actions(actions: List[PlayerAction]) -> str:
@@ -25,19 +41,23 @@ def _format_actions(actions: List[PlayerAction]) -> str:
         return "无。"
 
     return "\n".join(
-        f"- {action.get('character_name', '未知角色')}：{action.get('action_text', '')}"
+        f"- player_id={action.get('player_id', '')}; "
+        f"character_name={action.get('character_name', '未知角色')}; "
+        f"action={action.get('action_text', '')}"
         for action in actions
     )
 
 
-def _format_characters(characters: List[Dict[str, Any]]) -> str:
+def _format_characters(characters: List[PlayerInfo]) -> str:
     if not characters:
         return "暂无角色状态。"
 
     return "\n".join(
-        f"- {character.get('name', '未知角色')}："
-        f"状态={character.get('status', {})}；"
-        f"物品={character.get('inventory', [])}"
+        f"- character_id={_format_character_id(character.id)}; "
+        f"player_id={_format_player_id(character.id)}; "
+        f"character_name={character.character_name}; "
+        f"status={character.status}; "
+        f"inventory={character.inventory}"
         for character in characters
     )
 
@@ -69,7 +89,18 @@ JSON 必须符合以下结构：
     "time": "当前时间",
     "location": "当前地点",
     "description": "下一回合要使用的客观场景描述"
-  }
+  },
+  "character_updates": [
+    {
+      "character_id": "char_001",
+      "player_id": "player_001",
+      "character_name": "林烛",
+      "status_delta": {
+        "hp": -13,
+        "conditions_add": ["流血"]
+      }
+    }
+  ]
 }
 
 字段要求：
@@ -138,6 +169,7 @@ def call_llm(state: GMState) -> dict[str, Any]:
             "raw_response": "",
             "narration": "【系统错误】prompt 为空，无法生成剧情。",
             "scene_update": {},
+            "character_updates": [],
         }
 
     llm = get_llm()
@@ -159,6 +191,7 @@ def parse_llm_output(state: GMState) -> dict[str, Any]:
             "location": scene_update.get("location", ""),
             "description": scene_update.get("description", ""),
         },
+        "character_updates": parsed.get("character_updates", []),
     }
 
 

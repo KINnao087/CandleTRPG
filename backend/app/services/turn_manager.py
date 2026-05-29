@@ -26,6 +26,7 @@ class TurnManager:
             actions=actions,
             narration=res["narration"],
             scene=res["scene"],
+            character_updates=res.get("character_updates", []),
         )
         self.turn_index += 1
         return res

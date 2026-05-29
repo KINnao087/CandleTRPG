@@ -108,23 +108,17 @@ class RoomRuntimeInfo:
         return f"player_{player_id:03d}"
 
     @staticmethod
-    def _format_characters(characters: list[Any]) -> list[dict[str, Any]]:
-        result = []
-        for index, character in enumerate(characters, start=1):
-            if isinstance(character, dict):
-                result.append(character)
-            else:
-                result.append({
-                    "id": f"char_{index:03d}",
-                    "player_id": f"player_{index:03d}",
-                    "name": str(character),
-                    "status": {
-                        "hp": 100,
-                        "conditions": [],
-                    },
-                    "inventory": [],
-                })
-        return result
+    def _format_characters(characters: list[PlayerInfo]) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": f"char_{character.id:03d}",
+                "player_id": RoomRuntimeInfo._format_player_id(character.id),
+                "name": character.character_name,
+                "status": character.status,
+                "inventory": character.inventory,
+            }
+            for character in characters
+        ]
 
 
 class RoomStore:

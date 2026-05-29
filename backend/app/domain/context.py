@@ -9,6 +9,7 @@ class TurnHistory(TypedDict):
     actions: List[PlayerAction]
     narration: str
     scene: str
+    character_updates: List[dict[str, Any]]
 
 @dataclass
 class World:

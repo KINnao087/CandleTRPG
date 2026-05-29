@@ -67,19 +67,6 @@ def _get_room(room_id: str) -> RoomRuntimeInfo | None:
     return room_store.get_room(room_id)
 
 
-def _build_character(player_id: str, character_name: str) -> dict:
-    return {
-        "id": "char_001",
-        "player_id": player_id,
-        "name": character_name,
-        "status": {
-            "hp": 100,
-            "conditions": [],
-        },
-        "inventory": [],
-    }
-
-
 def _create_room(room_id: str, payload: CreateRoomRequest) -> RoomRuntimeInfo:
     world = World(title=payload.world.title, setting=payload.world.setting)
     scene = Scene.from_dict({
@@ -87,25 +74,24 @@ def _create_room(room_id: str, payload: CreateRoomRequest) -> RoomRuntimeInfo:
         "location": "",
         "description": payload.world.opening_scene,
     })
+    host = PlayerInfo(
+        id=0,
+        name=payload.host_name,
+        character_name=payload.character_name,
+        is_host=True,
+    )
 
     room_runtime_info = RoomRuntimeInfo(
         room_id=room_id,
         phase="planning",
         turn_manager=TurnManager(ContextManager(
             world=world,
-            characters=[_build_character("player_001", payload.character_name)],
+            characters=[host],
             scene=scene
         )),
         world=world
     )
-    room_runtime_info.add_player(
-        PlayerInfo(
-            id=0,
-            name=payload.host_name,
-            character_name=payload.character_name,
-            is_host=True,
-        )
-    )
+    room_runtime_info.add_player(host)
     room_runtime_info.timeline.append({
         "id": "event_001",
         "type": "scene",
@@ -205,6 +191,7 @@ def join_room(room_id: str, payload: JoinRequest):
             is_host=payload.role == "host",
         )
     )
+    room.turn_manager.context_manager.characters.append(player)
 
     return {
         "player_id": RoomRuntimeInfo._format_player_id(player.id),
