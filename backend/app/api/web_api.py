@@ -6,6 +6,7 @@ from backend.app.domain.api import (
     HostResolveRequest,
     HostRollBackRequest,
     JoinRequest,
+    LeaveRequest,
     PlayerActionRequest,
     PlayerReadyRequest,
     CreateRoomRequest,
@@ -16,19 +17,20 @@ from backend.app.domain.room import PlayerInfo
 from backend.app.services.context_manager import ContextManager
 from backend.app.services.turn_manager import TurnManager
 from backend.app.storage.room_store import RoomRuntimeInfo, RoomStore
+from backend.app.ws.web_socket import RoomConnectionManager
 
 app = FastAPI(title="CandleTRPG-LAN")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 room_store = RoomStore()
-
+connection_manager = RoomConnectionManager()
 
 # def build_initial_world() -> str:
 #     return (
@@ -64,7 +66,14 @@ room_store = RoomStore()
 
 
 def _get_room(room_id: str) -> RoomRuntimeInfo | None:
+    """获取一个房间的管理器"""
     return room_store.get_room(room_id)
+
+
+async def _broadcast_room_state(room: RoomRuntimeInfo) -> dict:
+    room_state = room.to_room_state()
+    await connection_manager.broadcast_room_state(room.room_id, room_state)
+    return room_state
 
 
 def _create_room(room_id: str, payload: CreateRoomRequest) -> RoomRuntimeInfo:
@@ -136,28 +145,29 @@ def health():
 
 
 @app.post("/api/rooms/{room_id}")
-def create_room(room_id: str, payload: CreateRoomRequest):
+async def create_room(room_id: str, payload: CreateRoomRequest):
     room = _get_room(room_id)
     if room is None:
         room = _create_room(room_id, payload)
         room_store.add_room(room)
 
     host = next(player for player in room.players.values() if player.is_host)
+    room_state = await _broadcast_room_state(room)
     return {
         "player_id": RoomRuntimeInfo._format_player_id(host.id),
-        "room_state": room.to_room_state(),
+        "room_state": room_state,
     }
 
 
 @app.post("/api/rooms/{room_id}/world")
-def import_world(room_id: str, payload: WorldRequest):
+async def import_world(room_id: str, payload: WorldRequest):
     room = _get_room(room_id)
     if room is None:
         return None
 
     _update_room_world(room, payload)
     return {
-        "room_state": room.to_room_state(),
+        "room_state": await _broadcast_room_state(room),
     }
 
 
@@ -170,7 +180,7 @@ def get_room_state(room_id: str):
 
 
 @app.post("/api/rooms/{room_id}/join")
-def join_room(room_id: str, payload: JoinRequest):
+async def join_room(room_id: str, payload: JoinRequest):
     room = _get_room(room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
@@ -178,9 +188,10 @@ def join_room(room_id: str, payload: JoinRequest):
     if payload.role == "host":
         for current_player in room.players.values():
             if current_player.is_host:
+                room_state = await _broadcast_room_state(room)
                 return {
                     "player_id": RoomRuntimeInfo._format_player_id(current_player.id),
-                    "room_state": room.to_room_state(),
+                    "room_state": room_state,
                 }
 
     player = room.add_player(
@@ -193,14 +204,29 @@ def join_room(room_id: str, payload: JoinRequest):
     )
     room.turn_manager.context_manager.characters.append(player)
 
+    room_state = await _broadcast_room_state(room)
     return {
         "player_id": RoomRuntimeInfo._format_player_id(player.id),
-        "room_state": room.to_room_state(),
+        "room_state": room_state,
     }
 
 
+@app.post("/api/rooms/{room_id}/leave")
+async def leave_room(room_id: str, payload: LeaveRequest):
+    room = _get_room(room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail="room not found")
+
+    player_id = parse_player_id(payload.player_id)
+    player = room.remove_player(player_id)
+    if player is None:
+        raise HTTPException(status_code=404, detail="player not found")
+
+    return await _broadcast_room_state(room)
+
+
 @app.post("/api/rooms/{room_id}/actions")
-def player_action(room_id: str, payload: PlayerActionRequest):
+async def player_action(room_id: str, payload: PlayerActionRequest):
     room = _get_room(room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
@@ -216,11 +242,11 @@ def player_action(room_id: str, payload: PlayerActionRequest):
         action_text=payload.action_text,
     )
     room.player_action(player_id, action)
-    return room.to_room_state()
+    return await _broadcast_room_state(room)
 
 
 @app.post("/api/rooms/{room_id}/ready")
-def player_ready(room_id: str, payload: PlayerReadyRequest):
+async def player_ready(room_id: str, payload: PlayerReadyRequest):
     room = _get_room(room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
@@ -231,11 +257,11 @@ def player_ready(room_id: str, payload: PlayerReadyRequest):
         raise HTTPException(status_code=404, detail="player not found")
 
     room.change_player_status(player_id, payload.ready)
-    return room.to_room_state()
+    return await _broadcast_room_state(room)
 
 
 @app.post("/api/host/resolve-turn")
-def resolve_turn(payload: HostResolveRequest):
+async def resolve_turn(payload: HostResolveRequest):
     room = _get_room(payload.room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
@@ -247,14 +273,34 @@ def resolve_turn(payload: HostResolveRequest):
         if not resolved:
             raise HTTPException(status_code=409, detail="not all players are ready")
 
-    return room.to_room_state()
+    return await _broadcast_room_state(room)
 
 
 @app.post("/api/host/rollback")
-def rollback(payload: HostRollBackRequest):
+async def rollback(payload: HostRollBackRequest):
     room = _get_room(payload.room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
     room.phase = "planning"
-    return room.to_room_state()
+    return await _broadcast_room_state(room)
+
+
+from fastapi import WebSocket, WebSocketDisconnect
+@app.websocket("/ws/rooms/{room_id}")
+async def room_socket(websocket: WebSocket, room_id: str, player_id: str | None = None):
+    await connection_manager.connect(room_id, websocket)
+
+    room = _get_room(room_id)
+    if room is not None:
+        await websocket.send_json({
+            "type": "room_state",
+            "room_id": room_id,
+            "payload": room.to_room_state(),
+        })
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        connection_manager.disconnect(room_id, websocket)

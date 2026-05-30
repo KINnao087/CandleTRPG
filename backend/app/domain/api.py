@@ -18,6 +18,9 @@ class JoinRequest(BaseModel):
     character_name: str
     role: str
 
+class LeaveRequest(BaseModel):
+    player_id: str
+
 class PlayerActionRequest(BaseModel):
     player_id: str
     character_name: str

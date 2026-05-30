@@ -130,6 +130,51 @@
   --tag-text: color-mix(in srgb, var(--custom-color) 70%, #111827);
 }
 
+.theme-apple .panel,
+.theme-apple .scene-panel,
+.theme-customWhite .panel,
+.theme-customWhite .scene-panel {
+  color: var(--text);
+}
+
+.theme-apple .panel h2,
+.theme-apple .scene-panel h2,
+.theme-apple .panel strong,
+.theme-apple .scene-panel strong,
+.theme-customWhite .panel h2,
+.theme-customWhite .scene-panel h2,
+.theme-customWhite .panel strong,
+.theme-customWhite .scene-panel strong {
+  color: var(--text-strong);
+}
+
+.theme-apple .markdown-text,
+.theme-apple .markdown-text p,
+.theme-apple .markdown-text li,
+.theme-customWhite .markdown-text,
+.theme-customWhite .markdown-text p,
+.theme-customWhite .markdown-text li {
+  color: var(--muted);
+}
+
+.theme-apple .scene-panel p,
+.theme-apple .latest-action-panel p,
+.theme-customWhite .scene-panel p,
+.theme-customWhite .latest-action-panel p {
+  color: var(--text);
+}
+
+.theme-apple .status-pill,
+.theme-customWhite .status-pill {
+  color: color-mix(in srgb, var(--accent) 64%, #111827);
+}
+
+.theme-apple .scene-panel .status-pill,
+.theme-customWhite .scene-panel .status-pill {
+  background: rgba(255, 255, 255, 0.72);
+  color: #111827;
+}
+
 .theme-customGray {
   color-scheme: dark;
   --page-bg: #111318;

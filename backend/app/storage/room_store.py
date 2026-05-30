@@ -41,6 +41,22 @@ class RoomRuntimeInfo:
         self.player_status[player.id] = False
         return player
 
+    def remove_player(self, player_id: int) -> PlayerInfo | None:
+        player = self.players.pop(player_id, None)
+        if player is None:
+            return None
+
+        self.player_status.pop(player_id, None)
+        self.actions.pop(player_id, None)
+
+        context = self.turn_manager.context_manager
+        context.characters = [
+            character for character in context.characters
+            if character.id != player_id
+        ]
+
+        return player
+
     def player_action(self, player_id: int, action: PlayerAction) -> None:
         self.actions[player_id] = action
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { roomApi } from "./api/client.js";
+import { DEFAULT_API_BASE_URL, roomApi } from "./api/client.js";
 import { createRoomSocket } from "./websocket/roomSocket.js";
 
 const demoState = {
@@ -383,6 +383,8 @@ function ThemeSwitcher({ theme, setTheme, customColor, setCustomColor }) {
 }
 
 function MainMenu({
+  serverUrl,
+  setServerUrl,
   roomId,
   setRoomId,
   playerName,
@@ -413,6 +415,14 @@ function MainMenu({
           <h2>主菜单</h2>
           <StatusPill>本地联机</StatusPill>
         </div>
+
+        <Field label="服务器地址">
+          <input
+            value={serverUrl}
+            onChange={(event) => setServerUrl(event.target.value)}
+            placeholder="例如：http://192.168.1.23:8001"
+          />
+        </Field>
 
         <Field label="用户名">
           <input
@@ -461,6 +471,8 @@ function MainMenu({
 }
 
 function CreateRoomMenu({
+  serverUrl,
+  setServerUrl,
   roomId,
   setRoomId,
   playerName,
@@ -498,6 +510,14 @@ function CreateRoomMenu({
         </div>
 
         <div className="setup-grid">
+          <Field label="服务器地址">
+            <input
+              value={serverUrl}
+              onChange={(event) => setServerUrl(event.target.value)}
+              placeholder="例如：http://192.168.1.23:8001"
+            />
+          </Field>
+
           <Field label="用户名">
             <input
               value={playerName}
@@ -692,7 +712,17 @@ function Timeline({ events }) {
   );
 }
 
-function RoomSummary({ roomId, playerName, characterName, role, worldTitle, turnIndex, onLeave }) {
+function RoomSummary({
+  serverUrl,
+  roomId,
+  playerName,
+  characterName,
+  role,
+  worldTitle,
+  turnIndex,
+  onLeave,
+  isBusy,
+}) {
   return (
     <section className="panel room-summary">
       <div className="panel-heading">
@@ -701,6 +731,10 @@ function RoomSummary({ roomId, playerName, characterName, role, worldTitle, turn
       </div>
 
       <dl>
+        <div>
+          <dt>服务器</dt>
+          <dd>{serverUrl || "同源后端"}</dd>
+        </div>
         <div>
           <dt>房间 ID</dt>
           <dd>{roomId}</dd>
@@ -723,7 +757,7 @@ function RoomSummary({ roomId, playerName, characterName, role, worldTitle, turn
         </div>
       </dl>
 
-      <button type="button" className="secondary full-width" onClick={onLeave}>
+      <button type="button" className="secondary full-width" onClick={onLeave} disabled={isBusy}>
         返回主菜单
       </button>
     </section>
@@ -732,6 +766,7 @@ function RoomSummary({ roomId, playerName, characterName, role, worldTitle, turn
 
 function App() {
   const [screen, setScreen] = useState("main");
+  const [serverUrl, setServerUrl] = useState(DEFAULT_API_BASE_URL || "http://127.0.0.1:8001");
   const [roomId, setRoomId] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [characterName, setCharacterName] = useState("");
@@ -781,7 +816,7 @@ function App() {
     let isMounted = true;
 
     roomApi
-      .getState(roomId)
+      .getState(roomId, serverUrl)
       .then((state) => {
         if (!isMounted) return;
         setRoomState((current) => mergeRoomState(current, state));
@@ -789,13 +824,13 @@ function App() {
       })
       .catch(() => {
         if (!isMounted) return;
-        setRoomState((current) => ({ ...current, room_id: roomId }));
+        setNotice("读取后端房间状态失败，未修改本地房间状态。");
       });
 
     return () => {
       isMounted = false;
     };
-  }, [screen, roomId]);
+  }, [screen, roomId, serverUrl]);
 
   useEffect(() => {
     if (screen !== "room" || !roomId) {
@@ -806,6 +841,7 @@ function App() {
     const socket = createRoomSocket({
       roomId,
       playerId,
+      serverUrl,
       onStatus: setSocketStatus,
       onMessage: (message) => {
         if (message.type === "room_state" || message.type === "turn_resolved") {
@@ -821,7 +857,7 @@ function App() {
     });
 
     return () => socket?.close();
-  }, [screen, roomId, playerId]);
+  }, [screen, roomId, playerId, serverUrl]);
 
   function validateIdentity() {
     if (!playerName.trim()) {
@@ -853,14 +889,14 @@ function App() {
     setIsBusy(true);
 
     try {
-      const state = await roomApi.getState(effectiveRoomId);
+      const state = await roomApi.getState(effectiveRoomId, serverUrl);
       setRoomState((current) => mergeRoomState(current, state));
 
       const joined = await roomApi.joinRoom(effectiveRoomId, {
         player_name: playerName.trim(),
         character_name: characterName.trim(),
         role,
-      });
+      }, serverUrl);
 
       setRoomId(effectiveRoomId);
       setPlayerId(joined.player_id || joined.id || playerId);
@@ -930,7 +966,7 @@ function App() {
           setting: trimmedWorldSetting,
           opening_scene: trimmedOpeningScene,
         },
-      });
+      }, serverUrl);
       nextRoomState = created.room_state || created;
     } catch {
       nextRoomState = null;
@@ -941,7 +977,7 @@ function App() {
         title: trimmedWorldTitle,
         setting: trimmedWorldSetting,
         opening_scene: trimmedOpeningScene,
-      });
+      }, serverUrl);
       nextRoomState = imported.room_state || imported || nextRoomState;
     } catch {
       nextRoomState = nextRoomState || null;
@@ -952,7 +988,7 @@ function App() {
         player_name: playerName.trim(),
         character_name: characterName.trim(),
         role: "host",
-      });
+      }, serverUrl);
 
       setPlayerId(joined.player_id || joined.id || "player_001");
       setRoomState((current) =>
@@ -970,42 +1006,36 @@ function App() {
       setScreen("room");
       setNotice("房间已创建，世界设定已导入。");
     } catch {
-      setPlayerId("host");
-      setRoomState({
-        ...demoState,
-        room_id: effectiveRoomId,
-        world: {
-          title: trimmedWorldTitle,
-          setting: trimmedWorldSetting,
-        },
-        scene: {
-          ...demoState.scene,
-          description: trimmedOpeningScene || demoState.scene.description,
-        },
-        players: demoState.players.map((player) =>
-          player.id === "host"
-            ? {
-                ...player,
-                name: playerName.trim(),
-                character_name: characterName.trim(),
-                role: "host",
-              }
-            : player,
-        ),
-      });
-      setScreen("room");
-      setNotice("后端暂不可用，已进入本地演示房间。");
+      setNotice("创建或加入房间失败，未进入本地演示房间。");
     } finally {
       setIsBusy(false);
     }
   }
 
-  function leaveRoom() {
+  function resetToMainMenu(nextNotice) {
     setScreen("main");
     setSocketStatus("closed");
     setActionText("");
     setHostNote("");
-    setNotice("已返回主菜单。");
+    setNotice(nextNotice);
+  }
+
+  async function leaveRoom() {
+    const leavingRoomId = roomId;
+    const leavingPlayerId = playerId;
+
+    setIsBusy(true);
+
+    try {
+      if (leavingRoomId && leavingPlayerId) {
+        await roomApi.leaveRoom(leavingRoomId, { player_id: leavingPlayerId }, serverUrl);
+      }
+      resetToMainMenu("已离开房间。");
+    } catch {
+      resetToMainMenu("离开房间请求失败，已返回主菜单；请检查后端是否已移除此玩家。");
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function submitAction() {
@@ -1023,17 +1053,11 @@ function App() {
     };
 
     try {
-      const state = await roomApi.submitAction(roomId, payload);
+      const state = await roomApi.submitAction(roomId, payload, serverUrl);
       setRoomState((current) => mergeRoomState(current, state));
       setNotice("行动已提交。");
     } catch {
-      setRoomState((current) => ({
-        ...current,
-        players: current.players.map((player) =>
-          player.id === playerId ? { ...player, action_text: payload.action_text } : player,
-        ),
-      }));
-      setNotice("后端暂不可用，行动已暂存在本地界面。");
+      setNotice("行动提交失败，房间状态未在本地伪造更新。");
     } finally {
       setIsBusy(false);
     }
@@ -1057,27 +1081,15 @@ function App() {
           action_text: actionText.trim(),
           turn_index: roomState.turn_index,
         };
-        const actionState = await roomApi.submitAction(roomId, actionPayload);
+        const actionState = await roomApi.submitAction(roomId, actionPayload, serverUrl);
         setRoomState((current) => mergeRoomState(current, actionState));
       }
 
-      const state = await roomApi.updateReady(roomId, { player_id: playerId, ready });
+      const state = await roomApi.updateReady(roomId, { player_id: playerId, ready }, serverUrl);
       setRoomState((current) => mergeRoomState(current, state));
       setNotice(ready ? "行动已提交，已标记准备。" : "已取消准备。");
     } catch {
-      setRoomState((current) => ({
-        ...current,
-        players: current.players.map((player) =>
-          player.id === playerId
-            ? {
-                ...player,
-                ready,
-                action_text: ready ? actionText.trim() : player.action_text,
-              }
-            : player,
-        ),
-      }));
-      setNotice(ready ? "后端暂不可用，行动和准备状态已暂存在本地界面。" : "已在本地取消准备。");
+      setNotice(ready ? "提交并准备失败，房间状态未在本地伪造更新。" : "取消准备失败，房间状态未在本地伪造更新。");
     } finally {
       setIsBusy(false);
     }
@@ -1085,22 +1097,17 @@ function App() {
 
   async function resolveTurn() {
     setIsBusy(true);
-    setRoomState((current) => ({ ...current, phase: "resolving" }));
 
     try {
       const state = await roomApi.resolveTurn({
         room_id: roomId,
         host_note: hostNote,
         force: readyCount < roomState.players.length,
-      });
+      }, serverUrl);
 
       setRoomState((current) => mergeRoomState(current, state));
       setNotice("本回合已结算。");
     } catch {
-      setRoomState((current) => ({
-        ...current,
-        phase: "planning",
-      }));
       setNotice("回合结算请求失败，未写入本地伪记录。");
     } finally {
       setIsBusy(false);
@@ -1114,17 +1121,12 @@ function App() {
       const state = await roomApi.rollback({
         room_id: roomId,
         turn_index: Math.max(1, roomState.turn_index - 1),
-      });
+      }, serverUrl);
 
       setRoomState((current) => mergeRoomState(current, state));
       setNotice("已回滚到上一回合。");
     } catch {
-      setRoomState((current) => ({
-        ...current,
-        turn_index: Math.max(1, current.turn_index - 1),
-        phase: "planning",
-      }));
-      setNotice("后端暂不可用，已在本地回滚显示。");
+      setNotice("回滚失败，房间状态未在本地伪造更新。");
     } finally {
       setIsBusy(false);
     }
@@ -1133,6 +1135,8 @@ function App() {
   if (screen === "main") {
     return (
       <MainMenu
+        serverUrl={serverUrl}
+        setServerUrl={setServerUrl}
         roomId={roomId}
         setRoomId={setRoomId}
         playerName={playerName}
@@ -1155,6 +1159,8 @@ function App() {
   if (screen === "create") {
     return (
       <CreateRoomMenu
+        serverUrl={serverUrl}
+        setServerUrl={setServerUrl}
         roomId={roomId}
         setRoomId={setRoomId}
         playerName={playerName}
@@ -1205,6 +1211,7 @@ function App() {
       <div className="layout">
         <aside className="sidebar">
           <RoomSummary
+            serverUrl={serverUrl}
             roomId={roomId}
             playerName={playerName}
             characterName={characterName}
@@ -1212,6 +1219,7 @@ function App() {
             worldTitle={roomState.world?.title || worldTitle}
             turnIndex={roomState.turn_index}
             onLeave={leaveRoom}
+            isBusy={isBusy}
           />
 
           <PlayerList players={roomState.players} />

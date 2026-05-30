@@ -53,7 +53,23 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
         "hp": 85,
         "conditions": []
       },
-      "inventory": ["终端", "短刀", "急救喷雾"]
+      "inventory": ["终端", "短刀", "急救喷雾"],
+      "abilities": [
+        {
+          "name": "绯红之王",
+          "description": "近距离力量型替身。",
+          "sub_abilities": [
+            {
+              "name": "时间删除",
+              "description": "可以删除最长为11秒的时间"
+            },
+            {
+              "name": "预知未来",
+              "description": "可以预知未来11秒的事件"
+            }
+          ]
+        }
+      ]
     }
   ],
   "timeline": [

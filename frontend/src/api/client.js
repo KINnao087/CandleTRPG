@@ -1,12 +1,26 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+export const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+
+export function normalizeApiBaseUrl(serverUrl = DEFAULT_API_BASE_URL) {
+  const rawUrl = (serverUrl || "").trim().replace(/\/+$/, "");
+  if (!rawUrl) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(rawUrl)) {
+    return rawUrl;
+  }
+  return `http://${rawUrl}`;
+}
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const { serverUrl, ...fetchOptions } = options;
+  const baseUrl = normalizeApiBaseUrl(serverUrl);
+
+  const response = await fetch(`${baseUrl}${path}`, {
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...(fetchOptions.headers || {}),
     },
-    ...options,
+    ...fetchOptions,
   });
 
   if (!response.ok) {
@@ -22,56 +36,71 @@ async function request(path, options = {}) {
 }
 
 export const roomApi = {
-  createRoom(roomId, payload) {
+  createRoom(roomId, payload, serverUrl) {
     return request(`/api/rooms/${encodeURIComponent(roomId)}`, {
       method: "POST",
       body: JSON.stringify(payload),
+      serverUrl,
     });
   },
 
-  getState(roomId) {
-    return request(`/api/rooms/${encodeURIComponent(roomId)}/state`);
+  getState(roomId, serverUrl) {
+    return request(`/api/rooms/${encodeURIComponent(roomId)}/state`, { serverUrl });
   },
 
-  importWorld(roomId, payload) {
+  importWorld(roomId, payload, serverUrl) {
     return request(`/api/rooms/${encodeURIComponent(roomId)}/world`, {
       method: "POST",
       body: JSON.stringify(payload),
+      serverUrl,
     });
   },
 
-  joinRoom(roomId, payload) {
+  joinRoom(roomId, payload, serverUrl) {
     return request(`/api/rooms/${encodeURIComponent(roomId)}/join`, {
       method: "POST",
       body: JSON.stringify(payload),
+      serverUrl,
     });
   },
 
-  submitAction(roomId, payload) {
+  leaveRoom(roomId, payload, serverUrl) {
+    return request(`/api/rooms/${encodeURIComponent(roomId)}/leave`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+      serverUrl,
+    });
+  },
+
+  submitAction(roomId, payload, serverUrl) {
     return request(`/api/rooms/${encodeURIComponent(roomId)}/actions`, {
       method: "POST",
       body: JSON.stringify(payload),
+      serverUrl,
     });
   },
 
-  updateReady(roomId, payload) {
+  updateReady(roomId, payload, serverUrl) {
     return request(`/api/rooms/${encodeURIComponent(roomId)}/ready`, {
       method: "POST",
       body: JSON.stringify(payload),
+      serverUrl,
     });
   },
 
-  resolveTurn(payload) {
+  resolveTurn(payload, serverUrl) {
     return request("/api/host/resolve-turn", {
       method: "POST",
       body: JSON.stringify(payload),
+      serverUrl,
     });
   },
 
-  rollback(payload) {
+  rollback(payload, serverUrl) {
     return request("/api/host/rollback", {
       method: "POST",
       body: JSON.stringify(payload),
+      serverUrl,
     });
   },
 };
