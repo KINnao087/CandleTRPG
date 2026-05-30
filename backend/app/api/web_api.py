@@ -152,6 +152,7 @@ async def create_room(room_id: str, payload: CreateRoomRequest):
         room_store.add_room(room)
 
     host = next(player for player in room.players.values() if player.is_host)
+    room.mark_player_online(host.id)
     room_state = await _broadcast_room_state(room)
     return {
         "player_id": RoomRuntimeInfo._format_player_id(host.id),
@@ -188,11 +189,27 @@ async def join_room(room_id: str, payload: JoinRequest):
     if payload.role == "host":
         for current_player in room.players.values():
             if current_player.is_host:
+                room.mark_player_online(current_player.id)
                 room_state = await _broadcast_room_state(room)
                 return {
                     "player_id": RoomRuntimeInfo._format_player_id(current_player.id),
                     "room_state": room_state,
                 }
+
+    player = room.find_player(
+        player_name=payload.player_name,
+        character_name=payload.character_name,
+    )
+    if player is not None:
+        if player.is_online:
+            raise HTTPException(status_code=409, detail="player already online")
+
+        room.mark_player_online(player.id)
+        room_state = await _broadcast_room_state(room)
+        return {
+            "player_id": RoomRuntimeInfo._format_player_id(player.id),
+            "room_state": room_state,
+        }
 
     player = room.add_player(
         PlayerInfo(
@@ -218,7 +235,7 @@ async def leave_room(room_id: str, payload: LeaveRequest):
         raise HTTPException(status_code=404, detail="room not found")
 
     player_id = parse_player_id(payload.player_id)
-    player = room.remove_player(player_id)
+    player = room.mark_player_offline(player_id)
     if player is None:
         raise HTTPException(status_code=404, detail="player not found")
 
@@ -235,6 +252,8 @@ async def player_action(room_id: str, payload: PlayerActionRequest):
 
     if player_id not in room.players:
         raise HTTPException(status_code=404, detail="player not found")
+    if not room.players[player_id].is_online:
+        raise HTTPException(status_code=409, detail="player is offline")
 
     action = PlayerAction(
         player_id=payload.player_id,
@@ -255,6 +274,8 @@ async def player_ready(room_id: str, payload: PlayerReadyRequest):
 
     if player_id not in room.players:
         raise HTTPException(status_code=404, detail="player not found")
+    if not room.players[player_id].is_online:
+        raise HTTPException(status_code=409, detail="player is offline")
 
     room.change_player_status(player_id, payload.ready)
     return await _broadcast_room_state(room)

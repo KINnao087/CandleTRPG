@@ -84,6 +84,7 @@ class PlayerInfo:
         "conditions": [],
     })
     abilities: list[Abilities] = field(default_factory=list)
+    is_online: bool = True
     is_host: bool = False
 
     def apply_update(self, update: dict[str, Any]) -> None:
@@ -176,6 +177,7 @@ class PlayerInfo:
             f"inventory={self.inventory}; "
             f"inventory_limits={self.inventory_limits}; "
             f"abilities={abilities_text}; "
+            f"is_online={self.is_online}; "
             f"is_host={self.is_host}"
         )
 

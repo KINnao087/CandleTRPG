@@ -35,11 +35,45 @@ class RoomRuntimeInfo:
 
     def add_player(self, player: PlayerInfo) -> PlayerInfo:
         player.id = self._next_player_id
+        player.is_online = True
         self._next_player_id += 1
 
         self.players[player.id] = player
         self.player_status[player.id] = False
         return player
+
+    def find_player(self, player_name: str, character_name: str) -> PlayerInfo | None:
+        for player in self.players.values():
+            if player.name == player_name and player.character_name == character_name:
+                return player
+        return None
+
+    def mark_player_online(self, player_id: int) -> PlayerInfo | None:
+        player = self.players.get(player_id)
+        if player is None:
+            return None
+
+        player.is_online = True
+        self.actions.pop(player_id, None)
+        self.player_status[player_id] = False
+        return player
+
+    def mark_player_offline(self, player_id: int) -> PlayerInfo | None:
+        player = self.players.get(player_id)
+        if player is None:
+            return None
+
+        player.is_online = False
+        self.actions.pop(player_id, None)
+        self.player_status[player_id] = False
+        return player
+
+    def get_online_players(self) -> list[PlayerInfo]:
+        return [
+            player
+            for player in self.players.values()
+            if player.is_online
+        ]
 
     def remove_player(self, player_id: int) -> PlayerInfo | None:
         player = self.players.pop(player_id, None)
@@ -64,8 +98,8 @@ class RoomRuntimeInfo:
         self.player_status[player_id] = status
 
     def try_resolve_turn(self, host_note: str = "") -> bool:
-        for player_id in self.players:
-            if not self.player_status.get(player_id, False):
+        for player in self.get_online_players():
+            if not self.player_status.get(player.id, False):
                 return False
 
         self.resolve_turn(host_note=host_note)
@@ -77,6 +111,7 @@ class RoomRuntimeInfo:
         result = self.turn_manager.resolve_turn(
             actions=self._build_turn_actions(force=force),
             host_note=host_note,
+            active_characters=self.get_online_players(),
         )
 
         self.timeline.insert(0, {
@@ -96,7 +131,8 @@ class RoomRuntimeInfo:
 
     def _build_turn_actions(self, force: bool) -> list[PlayerAction]:
         actions = []
-        for player_id, player in self.players.items():
+        for player in self.get_online_players():
+            player_id = player.id
             action = self.actions.get(player_id)
             if action is not None:
                 actions.append(action)
@@ -114,6 +150,7 @@ class RoomRuntimeInfo:
 
     def to_room_state(self) -> dict[str, Any]:
         context = self.turn_manager.context_manager
+        online_players = self.get_online_players()
 
         return {
             "room_id": self.room_id,
@@ -137,9 +174,9 @@ class RoomRuntimeInfo:
                     "ready": self.player_status.get(player.id, False),
                     "action_text": self.actions[player.id].action_text if player.id in self.actions else "",
                 }
-                for player in self.players.values()
+                for player in online_players
             ],
-            "characters": self._format_characters(context.characters),
+            "characters": self._format_characters(online_players),
             "timeline": self.timeline,
         }
 
