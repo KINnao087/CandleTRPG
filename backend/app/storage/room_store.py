@@ -5,7 +5,7 @@ from backend.app.domain.context import World
 from backend.app.domain.room import PlayerInfo
 from backend.app.services.turn_manager import TurnManager
 
-
+#内存运行时房间信息
 class RoomRuntimeInfo:
     room_id: str
     phase: str
