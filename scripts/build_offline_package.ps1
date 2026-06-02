@@ -18,7 +18,21 @@ function Ensure-Command($name) {
   }
 }
 
+function Get-PythonCommand {
+  if (Get-Command "py" -ErrorAction SilentlyContinue) {
+    return [pscustomobject]@{ Exe = "py"; Args = @("-3") }
+  }
+  if (Get-Command "python" -ErrorAction SilentlyContinue) {
+    return [pscustomobject]@{ Exe = "python"; Args = @() }
+  }
+  if (Get-Command "python3" -ErrorAction SilentlyContinue) {
+    return [pscustomobject]@{ Exe = "python3"; Args = @() }
+  }
+  throw "Required command not found: Python 3.11+. Install Python and make sure it is in PATH."
+}
+
 Ensure-Command "npm"
+$pythonCommand = Get-PythonCommand
 
 Write-Host "Building frontend..."
 Push-Location $frontendDir
@@ -62,7 +76,7 @@ Copy-Item -Path (Join-Path $packageTemplateDir "env.example") -Destination (Join
 if (-not $SkipWheelhouse) {
   Write-Host "Downloading Python wheels for offline install..."
   New-Item -ItemType Directory -Force -Path (Join-Path $outputPath "wheelhouse") | Out-Null
-  py -3 -m pip download -r (Join-Path $outputPath "requirements.txt") -d (Join-Path $outputPath "wheelhouse")
+  & $pythonCommand.Exe @($pythonCommand.Args) -m pip download -r (Join-Path $outputPath "requirements.txt") -d (Join-Path $outputPath "wheelhouse")
 }
 
 Write-Host ""

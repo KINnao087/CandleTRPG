@@ -69,11 +69,17 @@ const phaseLabels = {
 };
 
 const themeOptions = [
-  { id: "apple", label: "苹果" },
-  { id: "cyberBlue", label: "蓝紫赛博朋克" },
-  { id: "cyberRed", label: "红黑赛博朋克" },
-  { id: "customWhite", label: "白底自定义" },
-  { id: "customGray", label: "灰底自定义" },
+  { id: "apple", label: "🍎 苹果" },
+  { id: "cyberBlue", label: "💜 蓝紫赛博朋克" },
+  { id: "cyberRed", label: "❤️ 红黑赛博朋克" },
+  { id: "customWhite", label: "🤍 白底自定义" },
+  { id: "customGray", label: "🩶 灰底自定义" },
+  { id: "emeraldForest", label: "🌿 翡翠森林" },
+  { id: "royalAmethyst", label: "👑 皇家紫金" },
+  { id: "neonSynthwave", label: "💖 霓虹合成波" },
+  { id: "frostAurora", label: "❄️ 冰霜极光" },
+  { id: "sunsetEmber", label: "🔥 落日余晖" },
+  { id: "midnightVoid", label: "🌑 午夜虚空" },
 ];
 
 function generateRoomId() {

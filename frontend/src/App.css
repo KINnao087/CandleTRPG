@@ -205,6 +205,255 @@
     linear-gradient(135deg, #2f343c, #12151a 66%, #0b0d11);
 }
 
+/* ============================================================
+   翡翠森林 — Emerald Forest
+   Deep woodland green with amber-gold highlights.
+   ============================================================ */
+.theme-emeraldForest {
+  color-scheme: dark;
+  --page-bg: #0a1210;
+  --page-overlay-a: rgba(10, 18, 16, 0.92);
+  --page-overlay-b: rgba(5, 10, 8, 0.96);
+  --menu-overlay-a: rgba(8, 14, 12, 0.82);
+  --menu-overlay-b: rgba(14, 20, 10, 0.78);
+  --panel-bg: rgba(12, 24, 20, 0.9);
+  --panel-soft: rgba(18, 34, 28, 0.74);
+  --panel-alt: rgba(8, 20, 16, 0.82);
+  --panel-border: rgba(52, 211, 153, 0.25);
+  --input-bg: rgba(6, 16, 12, 0.92);
+  --text: #d1fae5;
+  --text-strong: #ecfdf5;
+  --muted: #a7f3d0;
+  --muted-2: #6ee7b7;
+  --accent: #34d399;
+  --accent-2: #f59e0b;
+  --accent-3: #fbbf24;
+  --button-bg: linear-gradient(135deg, #059669, #047857 48%, #065f46);
+  --button-text: #f8fdff;
+  --secondary-bg: rgba(245, 158, 11, 0.1);
+  --secondary-text: #fde68a;
+  --secondary-border: rgba(245, 158, 11, 0.52);
+  --tag-bg: rgba(52, 211, 153, 0.14);
+  --tag-text: #a7f3d0;
+  --hero-image:
+    radial-gradient(ellipse 80% 60% at 30% 20%, rgba(52, 211, 153, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 70% 70%, rgba(245, 158, 11, 0.12) 0%, transparent 55%),
+    radial-gradient(circle at 15% 35%, rgba(52, 211, 153, 0.5) 0 1px, transparent 2px),
+    radial-gradient(circle at 58% 28%, rgba(167, 243, 208, 0.45) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 62%, rgba(245, 158, 11, 0.4) 0 2px, transparent 3px),
+    radial-gradient(circle at 42% 78%, rgba(52, 211, 153, 0.35) 0 1px, transparent 2px),
+    radial-gradient(circle at 25% 55%, rgba(167, 243, 208, 0.3) 0 1px, transparent 2px),
+    linear-gradient(160deg, #0a1a14, #061210 48%, #0b1710);
+}
+
+/* ============================================================
+   皇家紫金 — Royal Amethyst
+   Deep purple-black with gold accents. Regal medieval-fantasy.
+   ============================================================ */
+.theme-royalAmethyst {
+  color-scheme: dark;
+  --page-bg: #0f0b1a;
+  --page-overlay-a: rgba(15, 11, 26, 0.92);
+  --page-overlay-b: rgba(8, 5, 16, 0.96);
+  --menu-overlay-a: rgba(15, 11, 26, 0.80);
+  --menu-overlay-b: rgba(22, 12, 32, 0.76);
+  --panel-bg: rgba(22, 16, 40, 0.9);
+  --panel-soft: rgba(30, 22, 52, 0.72);
+  --panel-alt: rgba(18, 10, 34, 0.80);
+  --panel-border: rgba(196, 181, 253, 0.26);
+  --input-bg: rgba(10, 6, 20, 0.94);
+  --text: #e9d5ff;
+  --text-strong: #f5f0ff;
+  --muted: #c4b5fd;
+  --muted-2: #a78bfa;
+  --accent: #c084fc;
+  --accent-2: #f59e0b;
+  --accent-3: #fbbf24;
+  --button-bg: linear-gradient(135deg, #7c3aed, #6d28d9 44%, #4c1d95);
+  --button-text: #f8fdff;
+  --secondary-bg: rgba(245, 158, 11, 0.1);
+  --secondary-text: #fde68a;
+  --secondary-border: rgba(245, 158, 11, 0.56);
+  --tag-bg: rgba(192, 132, 252, 0.16);
+  --tag-text: #e9d5ff;
+  --hero-image:
+    radial-gradient(ellipse 70% 55% at 35% 25%, rgba(192, 132, 252, 0.2) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 45% at 65% 65%, rgba(245, 158, 11, 0.14) 0%, transparent 55%),
+    radial-gradient(circle at 20% 30%, rgba(216, 180, 254, 0.5) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 22%, rgba(192, 132, 252, 0.45) 0 2px, transparent 3px),
+    radial-gradient(circle at 55% 72%, rgba(245, 158, 11, 0.4) 0 1px, transparent 2px),
+    radial-gradient(circle at 38% 48%, rgba(196, 181, 253, 0.35) 0 1px, transparent 2px),
+    radial-gradient(circle at 88% 58%, rgba(245, 158, 11, 0.3) 0 1px, transparent 2px),
+    linear-gradient(145deg, #140f28, #0a0518 54%, #0f0a1e);
+}
+
+/* ============================================================
+   霓虹合成波 — Neon Synthwave
+   80s retro with hot-pink + cyan neon, CRT glow, chrome vibes.
+   ============================================================ */
+.theme-neonSynthwave {
+  color-scheme: dark;
+  --page-bg: #0a0718;
+  --page-overlay-a: rgba(10, 7, 24, 0.88);
+  --page-overlay-b: rgba(6, 4, 16, 0.95);
+  --menu-overlay-a: rgba(10, 7, 24, 0.78);
+  --menu-overlay-b: rgba(20, 6, 30, 0.72);
+  --panel-bg: rgba(18, 14, 36, 0.88);
+  --panel-soft: rgba(26, 20, 48, 0.68);
+  --panel-alt: rgba(30, 8, 42, 0.72);
+  --panel-border: rgba(236, 72, 153, 0.28);
+  --input-bg: rgba(8, 5, 18, 0.94);
+  --text: #f0e6ff;
+  --text-strong: #fdf4ff;
+  --muted: #e2c6f3;
+  --muted-2: #d4a5e8;
+  --accent: #ec4899;
+  --accent-2: #06b6d4;
+  --accent-3: #fbbf24;
+  --button-bg: linear-gradient(135deg, #ec4899, #be185d 46%, #831843);
+  --button-text: #fdf4ff;
+  --secondary-bg: rgba(6, 182, 212, 0.1);
+  --secondary-text: #67e8f9;
+  --secondary-border: rgba(6, 182, 212, 0.56);
+  --tag-bg: rgba(236, 72, 153, 0.16);
+  --tag-text: #fbcfe8;
+  --hero-image:
+    linear-gradient(180deg, transparent 0 48%, rgba(236, 72, 153, 0.08) 49%, transparent 50%),
+    linear-gradient(90deg, transparent 0 72%, rgba(6, 182, 212, 0.1) 73%, transparent 74%),
+    linear-gradient(0deg, transparent 0 28%, rgba(236, 72, 153, 0.06) 29%, transparent 30%),
+    linear-gradient(90deg, transparent 0 44%, rgba(6, 182, 212, 0.08) 45%, transparent 46%),
+    radial-gradient(circle at 22% 18%, rgba(236, 72, 153, 0.55) 0 2px, transparent 3px),
+    radial-gradient(circle at 68% 32%, rgba(6, 182, 212, 0.5) 0 2px, transparent 3px),
+    radial-gradient(circle at 45% 68%, rgba(236, 72, 153, 0.42) 0 1px, transparent 2px),
+    radial-gradient(circle at 78% 55%, rgba(6, 182, 212, 0.44) 0 1px, transparent 2px),
+    linear-gradient(155deg, #1a0d2e, #080514 52%, #0d0720);
+}
+
+/* ============================================================
+   冰霜极光 — Frost Aurora
+   Icy teal-cyan with aurora borealis glow. Cold, crystalline.
+   ============================================================ */
+.theme-frostAurora {
+  color-scheme: dark;
+  --page-bg: #0a1628;
+  --page-overlay-a: rgba(10, 22, 40, 0.9);
+  --page-overlay-b: rgba(5, 14, 26, 0.95);
+  --menu-overlay-a: rgba(8, 18, 34, 0.80);
+  --menu-overlay-b: rgba(14, 26, 44, 0.76);
+  --panel-bg: rgba(12, 26, 46, 0.88);
+  --panel-soft: rgba(18, 34, 58, 0.68);
+  --panel-alt: rgba(8, 22, 42, 0.78);
+  --panel-border: rgba(103, 232, 249, 0.24);
+  --input-bg: rgba(6, 16, 30, 0.94);
+  --text: #e0f2fe;
+  --text-strong: #f0f9ff;
+  --muted: #bae6fd;
+  --muted-2: #7dd3fc;
+  --accent: #22d3ee;
+  --accent-2: #818cf8;
+  --accent-3: #67e8f9;
+  --button-bg: linear-gradient(135deg, #0891b2, #0e7490 46%, #155e75);
+  --button-text: #f8fdff;
+  --secondary-bg: rgba(34, 211, 238, 0.08);
+  --secondary-text: #bae6fd;
+  --secondary-border: rgba(34, 211, 238, 0.48);
+  --tag-bg: rgba(34, 211, 238, 0.13);
+  --tag-text: #bae6fd;
+  --hero-image:
+    radial-gradient(ellipse 80% 50% at 40% 30%, rgba(34, 211, 238, 0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 45% at 60% 55%, rgba(129, 140, 248, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 35% at 25% 70%, rgba(103, 232, 249, 0.12) 0%, transparent 50%),
+    radial-gradient(circle at 18% 22%, rgba(103, 232, 249, 0.5) 0 1px, transparent 2px),
+    radial-gradient(circle at 62% 28%, rgba(34, 211, 238, 0.45) 0 2px, transparent 3px),
+    radial-gradient(circle at 42% 55%, rgba(129, 140, 248, 0.4) 0 1px, transparent 2px),
+    radial-gradient(circle at 75% 60%, rgba(103, 232, 249, 0.38) 0 1px, transparent 2px),
+    radial-gradient(circle at 30% 74%, rgba(34, 211, 238, 0.35) 0 1px, transparent 2px),
+    linear-gradient(140deg, #0c1c36, #061224 52%, #0a162e);
+}
+
+/* ============================================================
+   落日余晖 — Sunset Ember
+   Warm amber-orange sunset tones. Campfire glow, adventure feel.
+   ============================================================ */
+.theme-sunsetEmber {
+  color-scheme: dark;
+  --page-bg: #1a100c;
+  --page-overlay-a: rgba(26, 16, 12, 0.92);
+  --page-overlay-b: rgba(14, 7, 4, 0.96);
+  --menu-overlay-a: rgba(22, 14, 10, 0.82);
+  --menu-overlay-b: rgba(28, 16, 10, 0.80);
+  --panel-bg: rgba(36, 24, 18, 0.9);
+  --panel-soft: rgba(46, 30, 22, 0.74);
+  --panel-alt: rgba(28, 16, 10, 0.82);
+  --panel-border: rgba(251, 191, 36, 0.26);
+  --input-bg: rgba(16, 9, 5, 0.94);
+  --text: #fef3c7;
+  --text-strong: #fffbeb;
+  --muted: #fde68a;
+  --muted-2: #fcd34d;
+  --accent: #f59e0b;
+  --accent-2: #ef4444;
+  --accent-3: #fb923c;
+  --button-bg: linear-gradient(135deg, #d97706, #b45309 46%, #92400e);
+  --button-text: #fffbeb;
+  --secondary-bg: rgba(239, 68, 68, 0.1);
+  --secondary-text: #fecaca;
+  --secondary-border: rgba(239, 68, 68, 0.48);
+  --tag-bg: rgba(245, 158, 11, 0.16);
+  --tag-text: #fde68a;
+  --hero-image:
+    radial-gradient(ellipse 75% 55% at 30% 25%, rgba(245, 158, 11, 0.2) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 40% at 65% 60%, rgba(239, 68, 68, 0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 30% at 50% 80%, rgba(251, 146, 60, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 22% 20%, rgba(252, 211, 77, 0.5) 0 1px, transparent 2px),
+    radial-gradient(circle at 58% 32%, rgba(245, 158, 11, 0.45) 0 2px, transparent 3px),
+    radial-gradient(circle at 72% 58%, rgba(251, 146, 60, 0.4) 0 1px, transparent 2px),
+    radial-gradient(circle at 35% 68%, rgba(252, 211, 77, 0.35) 0 1px, transparent 2px),
+    radial-gradient(circle at 80% 42%, rgba(245, 158, 11, 0.3) 0 1px, transparent 2px),
+    linear-gradient(150deg, #1f140c, #0f0804 50%, #1a0e06);
+}
+
+/* ============================================================
+   午夜虚空 — Midnight Void
+   Pure obsidian black with subtle cosmic violet. Minimal, moody.
+   ============================================================ */
+.theme-midnightVoid {
+  color-scheme: dark;
+  --page-bg: #050508;
+  --page-overlay-a: rgba(5, 5, 8, 0.94);
+  --page-overlay-b: rgba(2, 2, 4, 0.98);
+  --menu-overlay-a: rgba(5, 5, 8, 0.88);
+  --menu-overlay-b: rgba(10, 8, 16, 0.84);
+  --panel-bg: rgba(14, 13, 20, 0.92);
+  --panel-soft: rgba(20, 19, 28, 0.78);
+  --panel-alt: rgba(10, 8, 18, 0.84);
+  --panel-border: rgba(139, 92, 246, 0.2);
+  --input-bg: rgba(4, 3, 8, 0.96);
+  --text: #d1d5db;
+  --text-strong: #f3f4f6;
+  --muted: #9ca3af;
+  --muted-2: #6b7280;
+  --accent: #8b5cf6;
+  --accent-2: #6366f1;
+  --accent-3: #a78bfa;
+  --button-bg: linear-gradient(135deg, #7c3aed, #5b21b6 48%, #4c1d95);
+  --button-text: #f5f3ff;
+  --secondary-bg: rgba(139, 92, 246, 0.08);
+  --secondary-text: #c4b5fd;
+  --secondary-border: rgba(139, 92, 246, 0.38);
+  --tag-bg: rgba(139, 92, 246, 0.13);
+  --tag-text: #c4b5fd;
+  --hero-image:
+    radial-gradient(ellipse 60% 40% at 40% 30%, rgba(139, 92, 246, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 35% at 60% 60%, rgba(99, 102, 241, 0.1) 0%, transparent 55%),
+    radial-gradient(circle at 28% 18%, rgba(167, 139, 250, 0.4) 0 1px, transparent 2px),
+    radial-gradient(circle at 65% 25%, rgba(139, 92, 246, 0.35) 0 1px, transparent 2px),
+    radial-gradient(circle at 48% 62%, rgba(167, 139, 250, 0.3) 0 1px, transparent 2px),
+    radial-gradient(circle at 78% 48%, rgba(139, 92, 246, 0.28) 0 1px, transparent 2px),
+    radial-gradient(circle at 18% 55%, rgba(99, 102, 241, 0.25) 0 1px, transparent 2px),
+    linear-gradient(160deg, #08070d, #030306 50%, #06050c);
+}
+
 .theme-switcher {
   position: fixed;
   top: 18px;
@@ -221,7 +470,7 @@
 .theme-menu {
   display: grid;
   gap: 12px;
-  width: min(280px, calc(100vw - 36px));
+  width: min(380px, calc(100vw - 36px));
   margin-top: 10px;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -239,7 +488,7 @@
 
 .theme-options {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
