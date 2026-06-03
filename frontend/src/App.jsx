@@ -354,36 +354,41 @@ function ThemeSwitcher({ theme, setTheme, customColor, setCustomColor }) {
 
   return (
     <div className="theme-switcher">
-      <button type="button" className="theme-toggle" onClick={() => setIsOpen((value) => !value)}>
+      <button
+        type="button"
+        className={isOpen ? "theme-toggle open" : "theme-toggle"}
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((value) => !value)}
+      >
         主题
       </button>
-      {isOpen && (
-        <div className="theme-menu">
-          <strong>界面主题</strong>
-          <div className="theme-options">
-            {themeOptions.map((option) => (
-              <button
-                type="button"
-                className={theme === option.id ? "theme-option active" : "theme-option"}
-                key={option.id}
-                onClick={() => setTheme(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          {usesCustomColor && (
-            <label className="theme-color">
-              <span>自定义颜色</span>
-              <input
-                type="color"
-                value={customColor}
-                onChange={(event) => setCustomColor(event.target.value)}
-              />
-            </label>
-          )}
+      <div className={isOpen ? "theme-menu open" : "theme-menu"} aria-hidden={!isOpen}>
+        <strong>界面主题</strong>
+        <div className="theme-options">
+          {themeOptions.map((option) => (
+            <button
+              type="button"
+              className={theme === option.id ? "theme-option active" : "theme-option"}
+              key={option.id}
+              onClick={() => setTheme(option.id)}
+              tabIndex={isOpen ? 0 : -1}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
-      )}
+        {usesCustomColor && (
+          <label className="theme-color">
+            <span>自定义颜色</span>
+            <input
+              type="color"
+              value={customColor}
+              onChange={(event) => setCustomColor(event.target.value)}
+              tabIndex={isOpen ? 0 : -1}
+            />
+          </label>
+        )}
+      </div>
     </div>
   );
 }
@@ -407,42 +412,56 @@ function formatRoomUpdatedAt(value) {
   });
 }
 
-function SavedRoomsPanel({ rooms, status, onSelectRoom, onRefresh, isBusy }) {
+function SavedRoomsPanel({ rooms, status, selectedRoomId, onSelectRoom, onRefresh, isBusy, isLoading }) {
   return (
     <section className="panel saved-rooms-panel">
       <div className="panel-heading">
         <h2>已保存房间</h2>
-        <button type="button" className="secondary compact-button" onClick={onRefresh} disabled={isBusy}>
-          刷新
+        <button
+          type="button"
+          className={isLoading ? "secondary compact-button loading" : "secondary compact-button"}
+          onClick={onRefresh}
+          disabled={isBusy || isLoading}
+        >
+          {isLoading && <span className="button-spinner" aria-hidden="true" />}
+          <span>{isLoading ? "读取中" : "刷新"}</span>
         </button>
       </div>
 
       {status && <p className="saved-rooms-status">{status}</p>}
 
-      <div className="saved-room-list">
-        {rooms.length > 0 ? (
-          rooms.map((room) => (
-            <button
-              type="button"
-              className="saved-room-card"
-              key={room.room_id}
-              onClick={() => onSelectRoom(room.room_id)}
-              disabled={isBusy}
-            >
-              <span className="saved-room-title">{room.title || room.room_id}</span>
-              <span className="saved-room-id">{room.room_id}</span>
-              <span className="saved-room-meta">
-                第 {room.turn_index ?? "-"} 回合 · {phaseLabels[room.phase] || room.phase || "未知阶段"}
-              </span>
-              <span className="saved-room-meta">
-                玩家 {room.player_count ?? 0} 人 · 在线 {room.online_player_count ?? 0} 人
-              </span>
-              <span className="saved-room-time">{formatRoomUpdatedAt(room.updated_at)}</span>
-            </button>
-          ))
-        ) : (
-          <p className="saved-rooms-empty">当前服务器还没有可显示的已保存房间。</p>
-        )}
+      <div className={isLoading ? "saved-room-list-shell loading" : "saved-room-list-shell"}>
+        <div className="saved-room-list">
+          {rooms.length > 0 ? (
+            rooms.map((room) => (
+              <button
+                type="button"
+                className={room.room_id === selectedRoomId ? "saved-room-card selected" : "saved-room-card"}
+                key={room.room_id}
+                onClick={() => onSelectRoom(room.room_id)}
+                disabled={isBusy || isLoading}
+              >
+                <span className="saved-room-title">{room.title || room.room_id}</span>
+                <span className="saved-room-id">{room.room_id}</span>
+                <span className="saved-room-meta">
+                  第 {room.turn_index ?? "-"} 回合 · {phaseLabels[room.phase] || room.phase || "未知阶段"}
+                </span>
+                <span className="saved-room-meta">
+                  玩家 {room.player_count ?? 0} 人 · 在线 {room.online_player_count ?? 0} 人
+                </span>
+                <span className="saved-room-time">{formatRoomUpdatedAt(room.updated_at)}</span>
+              </button>
+            ))
+          ) : (
+            <p className="saved-rooms-empty">当前服务器还没有可显示的已保存房间。</p>
+          )}
+        </div>
+
+        <div className="saved-room-loading" aria-live="polite" aria-hidden={!isLoading}>
+          <span className="saved-room-loading-ring" aria-hidden="true" />
+          <strong>正在同步房间列表</strong>
+          <span>等待后端返回最新摘要</span>
+        </div>
       </div>
     </section>
   );
@@ -465,6 +484,8 @@ function MainMenu({
   onOpenCreate,
   savedRooms,
   savedRoomsStatus,
+  selectedSavedRoomId,
+  isLoadingSavedRooms,
   onSelectSavedRoom,
   onRefreshSavedRooms,
   themeClass,
@@ -484,9 +505,11 @@ function MainMenu({
         <SavedRoomsPanel
           rooms={savedRooms}
           status={savedRoomsStatus}
+          selectedRoomId={selectedSavedRoomId}
           onSelectRoom={onSelectSavedRoom}
           onRefresh={onRefreshSavedRooms}
           isBusy={isBusy}
+          isLoading={isLoadingSavedRooms}
         />
       </div>
 
@@ -523,8 +546,12 @@ function MainMenu({
         <Field label="房间 ID">
           <input
             value={roomId}
-            onChange={(event) => setRoomId(event.target.value)}
+            onChange={(event) => {
+              setRoomId(event.target.value);
+              setSelectedSavedRoomId("");
+            }}
             placeholder="加入已有房间时必填"
+            className={selectedSavedRoomId ? "room-id-input selected" : "room-id-input"}
           />
         </Field>
 
@@ -863,6 +890,8 @@ function App() {
   const [isBusy, setIsBusy] = useState(false);
   const [savedRooms, setSavedRooms] = useState([]);
   const [savedRoomsStatus, setSavedRoomsStatus] = useState("");
+  const [isLoadingSavedRooms, setIsLoadingSavedRooms] = useState(false);
+  const [selectedSavedRoomId, setSelectedSavedRoomId] = useState("");
   const [theme, setTheme] = useState("cyberBlue");
   const [customColor, setCustomColor] = useState("#2563eb");
 
@@ -891,6 +920,7 @@ function App() {
     "";
 
   async function loadSavedRooms() {
+    setIsLoadingSavedRooms(true);
     setSavedRoomsStatus("正在读取已保存房间...");
 
     try {
@@ -901,6 +931,8 @@ function App() {
     } catch {
       setSavedRooms([]);
       setSavedRoomsStatus("读取已保存房间失败，请确认服务器地址和后端状态。");
+    } finally {
+      setIsLoadingSavedRooms(false);
     }
   }
 
@@ -910,6 +942,7 @@ function App() {
     }
 
     let isMounted = true;
+    setIsLoadingSavedRooms(true);
     setSavedRoomsStatus("正在读取已保存房间...");
 
     roomApi
@@ -919,11 +952,13 @@ function App() {
         const rooms = Array.isArray(result?.rooms) ? result.rooms : [];
         setSavedRooms(rooms);
         setSavedRoomsStatus(rooms.length ? "" : "当前服务器没有已保存房间。");
+        setIsLoadingSavedRooms(false);
       })
       .catch(() => {
         if (!isMounted) return;
         setSavedRooms([]);
         setSavedRoomsStatus("读取已保存房间失败，请确认服务器地址和后端状态。");
+        setIsLoadingSavedRooms(false);
       });
 
     return () => {
@@ -1044,6 +1079,7 @@ function App() {
   }
 
   function selectSavedRoom(nextRoomId) {
+    setSelectedSavedRoomId(nextRoomId);
     setRoomId(nextRoomId);
     setNotice(`已选择房间 ${nextRoomId}，填写用户名和角色名后可以加入。`);
   }
@@ -1274,6 +1310,8 @@ function App() {
         onOpenCreate={openCreateRoom}
         savedRooms={savedRooms}
         savedRoomsStatus={savedRoomsStatus}
+        selectedSavedRoomId={selectedSavedRoomId}
+        isLoadingSavedRooms={isLoadingSavedRooms}
         onSelectSavedRoom={selectSavedRoom}
         onRefreshSavedRooms={loadSavedRooms}
         themeClass={themeClass}
