@@ -16,6 +16,7 @@ from backend.app.domain.context import Scene, World
 from backend.app.domain.room import PlayerInfo
 from backend.app.services.context_manager import ContextManager
 from backend.app.services.turn_manager import TurnManager
+from backend.app.storage.room_persistence import RoomPersistence
 from backend.app.storage.room_store import RoomRuntimeInfo, RoomStore
 from backend.app.ws.web_socket import RoomConnectionManager
 
@@ -30,6 +31,7 @@ app.add_middleware(
 )
 
 room_store = RoomStore()
+room_persistence = RoomPersistence()
 connection_manager = RoomConnectionManager()
 
 # def build_initial_world() -> str:
@@ -68,6 +70,18 @@ connection_manager = RoomConnectionManager()
 def _get_room(room_id: str) -> RoomRuntimeInfo | None:
     """获取一个房间的管理器"""
     return room_store.get_room(room_id)
+
+
+def _get_or_load_room(room_id: str) -> RoomRuntimeInfo | None:
+    room = _get_room(room_id)
+    if room is not None:
+        return room
+
+    room = room_persistence.load_latest_room(room_id)
+    if room is not None:
+        room_store.add_room(room)
+
+    return room
 
 
 async def _broadcast_room_state(room: RoomRuntimeInfo) -> dict:
@@ -146,13 +160,24 @@ def health():
 
 @app.post("/api/rooms/{room_id}")
 async def create_room(room_id: str, payload: CreateRoomRequest):
-    room = _get_room(room_id)
+    room = _get_or_load_room(room_id)
     if room is None:
         room = _create_room(room_id, payload)
         room_store.add_room(room)
+        room_persistence.append_event(room, "room_created", {
+            "host_name": payload.host_name,
+            "character_name": payload.character_name,
+            "world": {
+                "title": payload.world.title,
+                "setting": payload.world.setting,
+                "opening_scene": payload.world.opening_scene,
+            },
+        })
+        room_persistence.save_initial_room(room)
 
     host = next(player for player in room.players.values() if player.is_host)
     room.mark_player_online(host.id)
+    room_persistence.save_room(room)
     room_state = await _broadcast_room_state(room)
     return {
         "player_id": RoomRuntimeInfo._format_player_id(host.id),
@@ -162,11 +187,17 @@ async def create_room(room_id: str, payload: CreateRoomRequest):
 
 @app.post("/api/rooms/{room_id}/world")
 async def import_world(room_id: str, payload: WorldRequest):
-    room = _get_room(room_id)
+    room = _get_or_load_room(room_id)
     if room is None:
         return None
 
     _update_room_world(room, payload)
+    room_persistence.append_event(room, "world_updated", {
+        "title": payload.title,
+        "setting": payload.setting,
+        "opening_scene": payload.opening_scene,
+    })
+    room_persistence.save_room(room)
     return {
         "room_state": await _broadcast_room_state(room),
     }
@@ -174,7 +205,7 @@ async def import_world(room_id: str, payload: WorldRequest):
 
 @app.get("/api/rooms/{room_id}/state")
 def get_room_state(room_id: str):
-    room = _get_room(room_id)
+    room = _get_or_load_room(room_id)
     if room is None:
         return None
     return room.to_room_state()
@@ -182,7 +213,7 @@ def get_room_state(room_id: str):
 
 @app.post("/api/rooms/{room_id}/join")
 async def join_room(room_id: str, payload: JoinRequest):
-    room = _get_room(room_id)
+    room = _get_or_load_room(room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -190,6 +221,13 @@ async def join_room(room_id: str, payload: JoinRequest):
         for current_player in room.players.values():
             if current_player.is_host:
                 room.mark_player_online(current_player.id)
+                room_persistence.append_event(room, "player_reconnected", {
+                    "player_id": RoomRuntimeInfo._format_player_id(current_player.id),
+                    "player_name": current_player.name,
+                    "character_name": current_player.character_name,
+                    "role": "host",
+                })
+                room_persistence.save_room(room)
                 room_state = await _broadcast_room_state(room)
                 return {
                     "player_id": RoomRuntimeInfo._format_player_id(current_player.id),
@@ -205,6 +243,13 @@ async def join_room(room_id: str, payload: JoinRequest):
             raise HTTPException(status_code=409, detail="player already online")
 
         room.mark_player_online(player.id)
+        room_persistence.append_event(room, "player_reconnected", {
+            "player_id": RoomRuntimeInfo._format_player_id(player.id),
+            "player_name": player.name,
+            "character_name": player.character_name,
+            "role": "host" if player.is_host else "player",
+        })
+        room_persistence.save_room(room)
         room_state = await _broadcast_room_state(room)
         return {
             "player_id": RoomRuntimeInfo._format_player_id(player.id),
@@ -221,6 +266,13 @@ async def join_room(room_id: str, payload: JoinRequest):
     )
     room.turn_manager.context_manager.characters.append(player)
 
+    room_persistence.append_event(room, "player_joined", {
+        "player_id": RoomRuntimeInfo._format_player_id(player.id),
+        "player_name": player.name,
+        "character_name": player.character_name,
+        "role": "host" if player.is_host else "player",
+    })
+    room_persistence.save_room(room)
     room_state = await _broadcast_room_state(room)
     return {
         "player_id": RoomRuntimeInfo._format_player_id(player.id),
@@ -230,7 +282,7 @@ async def join_room(room_id: str, payload: JoinRequest):
 
 @app.post("/api/rooms/{room_id}/leave")
 async def leave_room(room_id: str, payload: LeaveRequest):
-    room = _get_room(room_id)
+    room = _get_or_load_room(room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -239,12 +291,18 @@ async def leave_room(room_id: str, payload: LeaveRequest):
     if player is None:
         raise HTTPException(status_code=404, detail="player not found")
 
+    room_persistence.append_event(room, "player_left", {
+        "player_id": payload.player_id,
+        "player_name": player.name,
+        "character_name": player.character_name,
+    })
+    room_persistence.save_room(room)
     return await _broadcast_room_state(room)
 
 
 @app.post("/api/rooms/{room_id}/actions")
 async def player_action(room_id: str, payload: PlayerActionRequest):
-    room = _get_room(room_id)
+    room = _get_or_load_room(room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -261,12 +319,19 @@ async def player_action(room_id: str, payload: PlayerActionRequest):
         action_text=payload.action_text,
     )
     room.player_action(player_id, action)
+    room_persistence.append_event(room, "player_action_submitted", {
+        "player_id": payload.player_id,
+        "character_name": payload.character_name,
+        "action_text": payload.action_text,
+        "turn_index": payload.turn_index,
+    })
+    room_persistence.save_room(room)
     return await _broadcast_room_state(room)
 
 
 @app.post("/api/rooms/{room_id}/ready")
 async def player_ready(room_id: str, payload: PlayerReadyRequest):
-    room = _get_room(room_id)
+    room = _get_or_load_room(room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -278,12 +343,17 @@ async def player_ready(room_id: str, payload: PlayerReadyRequest):
         raise HTTPException(status_code=409, detail="player is offline")
 
     room.change_player_status(player_id, payload.ready)
+    room_persistence.append_event(room, "ready_updated", {
+        "player_id": payload.player_id,
+        "ready": payload.ready,
+    })
+    room_persistence.save_room(room)
     return await _broadcast_room_state(room)
 
 
 @app.post("/api/host/resolve-turn")
 async def resolve_turn(payload: HostResolveRequest):
-    room = _get_room(payload.room_id)
+    room = _get_or_load_room(payload.room_id)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -294,25 +364,45 @@ async def resolve_turn(payload: HostResolveRequest):
         if not resolved:
             raise HTTPException(status_code=409, detail="not all players are ready")
 
+    context = room.turn_manager.context_manager
+    latest_history = context.turn_history[-1] if context.turn_history else None
+    room_persistence.append_event(room, "turn_resolved", {
+        "timeline_event": room.timeline[0] if room.timeline else None,
+        "scene": {
+            "time": context.scene.time,
+            "location": context.scene.location,
+            "description": context.scene.description,
+        },
+        "character_updates": latest_history.character_updates if latest_history else [],
+        "narration": latest_history.narration if latest_history else "",
+    })
+    room_persistence.save_turn_snapshot(room)
     return await _broadcast_room_state(room)
 
 
 @app.post("/api/host/rollback")
 async def rollback(payload: HostRollBackRequest):
-    room = _get_room(payload.room_id)
+    room = room_persistence.rollback_room(payload.room_id, payload.turn_index)
     if room is None:
-        raise HTTPException(status_code=404, detail="room not found")
+        raise HTTPException(status_code=404, detail="snapshot not found")
 
-    room.phase = "planning"
+    room_store.add_room(room)
+    room_persistence.append_event(room, "rollback", {
+        "target_turn_index": payload.turn_index,
+    })
+    room_persistence.save_room(room)
     return await _broadcast_room_state(room)
 
+@app.get("/api/saved-rooms")
+def list_saved_rooms(room_id: str):
+    return {"rooms":room_persistence.list_saved_rooms()}
 
 from fastapi import WebSocket, WebSocketDisconnect
 @app.websocket("/ws/rooms/{room_id}")
 async def room_socket(websocket: WebSocket, room_id: str, player_id: str | None = None):
     await connection_manager.connect(room_id, websocket)
 
-    room = _get_room(room_id)
+    room = _get_or_load_room(room_id)
     if room is not None:
         await websocket.send_json({
             "type": "room_state",

@@ -1,9 +1,22 @@
-from typing import Any
+from typing import Any, Mapping
 
 from backend.app.domain.action import PlayerAction
 from backend.app.domain.context import World
 from backend.app.domain.room import PlayerInfo
+from backend.app.services.context_manager import ContextManager
 from backend.app.services.turn_manager import TurnManager
+from backend.app.storage.serializers import (
+    dict_to_player_action,
+    dict_to_player_info,
+    dict_to_scene,
+    dict_to_turn_history,
+    dict_to_world,
+    player_action_to_dict,
+    player_info_to_dict,
+    scene_to_dict,
+    turn_history_to_dict,
+    world_to_dict,
+)
 
 #内存运行时房间信息
 class RoomRuntimeInfo:
@@ -148,6 +161,88 @@ class RoomRuntimeInfo:
                 )
         return actions
 
+    def to_snapshot(self) -> dict[str, Any]:
+        context = self.turn_manager.context_manager
+
+        return {
+            "schema_version": 1,
+            "room_id": self.room_id,
+            "phase": self.phase,
+            "next_player_id": self._next_player_id,
+            "world": world_to_dict(self.world),
+            "scene": scene_to_dict(context.scene),
+            "players": [
+                player_info_to_dict(player)
+                for player in self.players.values()
+            ],
+            "actions": {
+                str(player_id): player_action_to_dict(action)
+                for player_id, action in self.actions.items()
+            },
+            "player_status": {
+                str(player_id): ready
+                for player_id, ready in self.player_status.items()
+            },
+            "timeline": [
+                dict(event)
+                for event in self.timeline
+                if isinstance(event, Mapping)
+            ],
+            "turn_index": self.turn_manager.turn_index,
+            "turn_history": [
+                turn_history_to_dict(history)
+                for history in context.turn_history
+            ],
+            "recent_summary": getattr(context, "recent_summary", ""),
+        }
+
+    @classmethod
+    def from_snapshot(cls, data: Mapping[str, Any]) -> "RoomRuntimeInfo":
+        world = dict_to_world(data.get("world"))
+        players = [
+            dict_to_player_info(player)
+            for player in cls._dict_list(data.get("players", []))
+        ]
+        context = ContextManager(
+            world=world,
+            scene=dict_to_scene(data.get("scene")),
+            characters=players,
+        )
+        context.turn_history = [
+            dict_to_turn_history(history)
+            for history in cls._dict_list(data.get("turn_history", []))
+        ]
+        context.recent_summary = str(data.get("recent_summary", ""))
+
+        turn_manager = TurnManager(context)
+        turn_manager.turn_index = cls._parse_int(data.get("turn_index", 1), default=1)
+
+        room = cls(
+            room_id=str(data.get("room_id", "")),
+            phase=str(data.get("phase", "planning")),
+            turn_manager=turn_manager,
+            world=world,
+        )
+        room.players = {
+            player.id: player
+            for player in players
+        }
+        room.actions = cls._restore_actions(data.get("actions", {}))
+        room.player_status = cls._restore_player_status(data.get("player_status", {}))
+
+        for player_id in room.players:
+            room.player_status.setdefault(player_id, False)
+
+        room.timeline = [
+            dict(event)
+            for event in cls._dict_list(data.get("timeline", []))
+        ]
+        room._next_player_id = cls._parse_int(
+            data.get("next_player_id"),
+            default=(max(room.players.keys(), default=0) + 1),
+        )
+        return room
+
     def to_room_state(self) -> dict[str, Any]:
         context = self.turn_manager.context_manager
         online_players = self.get_online_players()
@@ -185,6 +280,56 @@ class RoomRuntimeInfo:
         return f"player_{player_id:03d}"
 
     @staticmethod
+    def _parse_int(value: Any, default: int) -> int:
+        if isinstance(value, str):
+            value = value.removeprefix("player_").removeprefix("char_")
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _restore_actions(cls, value: Any) -> dict[int, PlayerAction]:
+        if not isinstance(value, Mapping):
+            return {}
+
+        actions: dict[int, PlayerAction] = {}
+        for player_id, action_data in value.items():
+            if not isinstance(action_data, Mapping):
+                continue
+
+            actions[cls._parse_int(player_id, default=0)] = dict_to_player_action(action_data)
+
+        return {
+            player_id: action
+            for player_id, action in actions.items()
+            if player_id > 0
+        }
+
+    @classmethod
+    def _restore_player_status(cls, value: Any) -> dict[int, bool]:
+        if not isinstance(value, Mapping):
+            return {}
+
+        return {
+            cls._parse_int(player_id, default=0): bool(ready)
+            for player_id, ready in value.items()
+            if cls._parse_int(player_id, default=0) > 0
+        }
+
+    @staticmethod
+    def _dict_list(value: Any) -> list[dict[str, Any]]:
+        if not isinstance(value, list):
+            return []
+
+        return [
+            dict(item)
+            for item in value
+            if isinstance(item, Mapping)
+        ]
+
+    @staticmethod
     def _format_characters(characters: list[PlayerInfo]) -> list[dict[str, Any]]:
         return [
             {
@@ -200,6 +345,8 @@ class RoomRuntimeInfo:
             }
             for character in characters
         ]
+
+
 
 
 class RoomStore:

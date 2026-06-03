@@ -8,7 +8,9 @@ load_dotenv()
 @lru_cache(maxsize=1)
 def get_llm() -> ChatOpenAI:
     return ChatOpenAI(
-        model="deepseek-v4-pro",
-        base_url="https://api.deepseek.com",
+        # model="deepseek-v4-pro",
+        model=os.getenv("MODEL"),
+        # base_url="https://api.deepseek.com",
+        base_url=os.getenv("BASE_URL"),
         api_key=os.getenv("DEEPSEEK_API_KEY"),
     )
