@@ -388,6 +388,66 @@ function ThemeSwitcher({ theme, setTheme, customColor, setCustomColor }) {
   );
 }
 
+function formatRoomUpdatedAt(value) {
+  if (!value) {
+    return "未知时间";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function SavedRoomsPanel({ rooms, status, onSelectRoom, onRefresh, isBusy }) {
+  return (
+    <section className="panel saved-rooms-panel">
+      <div className="panel-heading">
+        <h2>已保存房间</h2>
+        <button type="button" className="secondary compact-button" onClick={onRefresh} disabled={isBusy}>
+          刷新
+        </button>
+      </div>
+
+      {status && <p className="saved-rooms-status">{status}</p>}
+
+      <div className="saved-room-list">
+        {rooms.length > 0 ? (
+          rooms.map((room) => (
+            <button
+              type="button"
+              className="saved-room-card"
+              key={room.room_id}
+              onClick={() => onSelectRoom(room.room_id)}
+              disabled={isBusy}
+            >
+              <span className="saved-room-title">{room.title || room.room_id}</span>
+              <span className="saved-room-id">{room.room_id}</span>
+              <span className="saved-room-meta">
+                第 {room.turn_index ?? "-"} 回合 · {phaseLabels[room.phase] || room.phase || "未知阶段"}
+              </span>
+              <span className="saved-room-meta">
+                玩家 {room.player_count ?? 0} 人 · 在线 {room.online_player_count ?? 0} 人
+              </span>
+              <span className="saved-room-time">{formatRoomUpdatedAt(room.updated_at)}</span>
+            </button>
+          ))
+        ) : (
+          <p className="saved-rooms-empty">当前服务器还没有可显示的已保存房间。</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function MainMenu({
   serverUrl,
   setServerUrl,
@@ -403,6 +463,10 @@ function MainMenu({
   isBusy,
   onFindRoom,
   onOpenCreate,
+  savedRooms,
+  savedRoomsStatus,
+  onSelectSavedRoom,
+  onRefreshSavedRooms,
   themeClass,
   themeStyle,
   themeSwitcher,
@@ -410,11 +474,21 @@ function MainMenu({
   return (
     <main className={`menu-shell ${themeClass}`} style={themeStyle}>
       {themeSwitcher}
-      <section className="menu-hero">
-        <span className="eyebrow">CandleTRPG LAN</span>
-        <h1>烛火跑团</h1>
-        <p>输入你的玩家信息，查找已有房间，或创建一个带世界设定的新局域网跑团房间。</p>
-      </section>
+      <div className="menu-left">
+        <section className="menu-hero">
+          <span className="eyebrow">CandleTRPG LAN</span>
+          <h1>烛火跑团</h1>
+          <p>输入你的玩家信息，查找已有房间，或创建一个带世界设定的新局域网跑团房间。</p>
+        </section>
+
+        <SavedRoomsPanel
+          rooms={savedRooms}
+          status={savedRoomsStatus}
+          onSelectRoom={onSelectSavedRoom}
+          onRefresh={onRefreshSavedRooms}
+          isBusy={isBusy}
+        />
+      </div>
 
       <form className="menu-form panel" onSubmit={onFindRoom}>
         <div className="panel-heading">
@@ -787,6 +861,8 @@ function App() {
   const [socketStatus, setSocketStatus] = useState("closed");
   const [notice, setNotice] = useState("请输入用户名、角色名和房间信息。");
   const [isBusy, setIsBusy] = useState(false);
+  const [savedRooms, setSavedRooms] = useState([]);
+  const [savedRoomsStatus, setSavedRoomsStatus] = useState("");
   const [theme, setTheme] = useState("cyberBlue");
   const [customColor, setCustomColor] = useState("#2563eb");
 
@@ -813,6 +889,47 @@ function App() {
     latestTimelineEvent?.content ||
     latestTimelineEvent?.narration ||
     "";
+
+  async function loadSavedRooms() {
+    setSavedRoomsStatus("正在读取已保存房间...");
+
+    try {
+      const result = await roomApi.getSavedRooms(serverUrl);
+      const rooms = Array.isArray(result?.rooms) ? result.rooms : [];
+      setSavedRooms(rooms);
+      setSavedRoomsStatus(rooms.length ? "" : "当前服务器没有已保存房间。");
+    } catch {
+      setSavedRooms([]);
+      setSavedRoomsStatus("读取已保存房间失败，请确认服务器地址和后端状态。");
+    }
+  }
+
+  useEffect(() => {
+    if (screen !== "main") {
+      return undefined;
+    }
+
+    let isMounted = true;
+    setSavedRoomsStatus("正在读取已保存房间...");
+
+    roomApi
+      .getSavedRooms(serverUrl)
+      .then((result) => {
+        if (!isMounted) return;
+        const rooms = Array.isArray(result?.rooms) ? result.rooms : [];
+        setSavedRooms(rooms);
+        setSavedRoomsStatus(rooms.length ? "" : "当前服务器没有已保存房间。");
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setSavedRooms([]);
+        setSavedRoomsStatus("读取已保存房间失败，请确认服务器地址和后端状态。");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [screen, serverUrl]);
 
   useEffect(() => {
     if (screen !== "room" || !roomId) {
@@ -926,6 +1043,11 @@ function App() {
     setScreen("create");
   }
 
+  function selectSavedRoom(nextRoomId) {
+    setRoomId(nextRoomId);
+    setNotice(`已选择房间 ${nextRoomId}，填写用户名和角色名后可以加入。`);
+  }
+
   async function importWorldFile(event) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -974,19 +1096,14 @@ function App() {
         },
       }, serverUrl);
       nextRoomState = created.room_state || created;
-    } catch {
-      nextRoomState = null;
-    }
-
-    try {
-      const imported = await roomApi.importWorld(effectiveRoomId, {
-        title: trimmedWorldTitle,
-        setting: trimmedWorldSetting,
-        opening_scene: trimmedOpeningScene,
-      }, serverUrl);
-      nextRoomState = imported.room_state || imported || nextRoomState;
-    } catch {
-      nextRoomState = nextRoomState || null;
+    } catch (error) {
+      if (error.status === 409) {
+        setNotice("房间 ID 已存在，请更换 ID，或从已保存房间列表加入。");
+      } else {
+        setNotice("创建房间失败，请确认后端状态。");
+      }
+      setIsBusy(false);
+      return;
     }
 
     try {
@@ -1155,6 +1272,10 @@ function App() {
         isBusy={isBusy}
         onFindRoom={findRoom}
         onOpenCreate={openCreateRoom}
+        savedRooms={savedRooms}
+        savedRoomsStatus={savedRoomsStatus}
+        onSelectSavedRoom={selectSavedRoom}
+        onRefreshSavedRooms={loadSavedRooms}
         themeClass={themeClass}
         themeStyle={themeStyle}
         themeSwitcher={themeSwitcher}

@@ -1,7 +1,6 @@
 import json
+from datetime import datetime, timezone
 from pathlib import Path
-
-import datetime
 
 from backend.app.storage.room_store import RoomRuntimeInfo
 
@@ -85,7 +84,7 @@ class SnapshotStore:
                 "online_player_count": len(online_players),
                 "updated_at": datetime.fromtimestamp(
                     latest_path.stat().st_mtime,
-                    datetime.timezone.utc,
+                    timezone.utc,
                 ).isoformat(),
             })
 

@@ -157,23 +157,26 @@ def parse_player_id(player_id: str) -> int:
 def health():
     return {"status": "ok"}
 
-
+#创建房间，如果存在就返回错误
 @app.post("/api/rooms/{room_id}")
 async def create_room(room_id: str, payload: CreateRoomRequest):
     room = _get_or_load_room(room_id)
-    if room is None:
-        room = _create_room(room_id, payload)
-        room_store.add_room(room)
-        room_persistence.append_event(room, "room_created", {
-            "host_name": payload.host_name,
-            "character_name": payload.character_name,
-            "world": {
-                "title": payload.world.title,
-                "setting": payload.world.setting,
-                "opening_scene": payload.world.opening_scene,
-            },
-        })
-        room_persistence.save_initial_room(room)
+
+    if room is not None:
+        raise HTTPException(status_code=409, detail="Room already exists")
+
+    room = _create_room(room_id, payload)
+    room_store.add_room(room)
+    room_persistence.append_event(room, "room_created", {
+        "host_name": payload.host_name,
+        "character_name": payload.character_name,
+        "world": {
+            "title": payload.world.title,
+            "setting": payload.world.setting,
+            "opening_scene": payload.world.opening_scene,
+        },
+    })
+    room_persistence.save_initial_room(room)
 
     host = next(player for player in room.players.values() if player.is_host)
     room.mark_player_online(host.id)
@@ -189,7 +192,7 @@ async def create_room(room_id: str, payload: CreateRoomRequest):
 async def import_world(room_id: str, payload: WorldRequest):
     room = _get_or_load_room(room_id)
     if room is None:
-        return None
+        raise HTTPException(status_code=404, detail="room not found")
 
     _update_room_world(room, payload)
     room_persistence.append_event(room, "world_updated", {
@@ -394,7 +397,7 @@ async def rollback(payload: HostRollBackRequest):
     return await _broadcast_room_state(room)
 
 @app.get("/api/saved-rooms")
-def list_saved_rooms(room_id: str):
+def list_saved_rooms():
     return {"rooms":room_persistence.list_saved_rooms()}
 
 from fastapi import WebSocket, WebSocketDisconnect
