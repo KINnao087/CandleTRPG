@@ -23,11 +23,16 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 ```json
 {
   "room_id": "room_001",
+  "room_hash": "sha256...",
+  "created_at": "2026-06-04T00:00:00+00:00",
+  "updated_at": "2026-06-04T00:00:00+00:00",
+  "host_player_id": "player_001",
   "turn_index": 1,
   "phase": "planning",
   "world": {
     "title": "霓虹旧城",
-    "setting": "近未来都市旧城区被企业、帮派和地下情报贩子共同控制。"
+    "setting": "近未来都市旧城区被企业、帮派和地下情报贩子共同控制。",
+    "opening_scene": "玩家们在 MIX 酒馆后门前集合。"
   },
   "scene": {
     "time": "夜晚 21:30",
