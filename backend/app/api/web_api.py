@@ -112,7 +112,8 @@ def _create_room(room_id: str, payload: CreateRoomRequest) -> RoomRuntimeInfo:
             characters=[host],
             scene=scene
         )),
-        world=world
+        world=world,
+        opening_scene=payload.world.opening_scene,
     )
     room_runtime_info.add_player(host)
     room_runtime_info.timeline.append({
@@ -127,25 +128,10 @@ def _create_room(room_id: str, payload: CreateRoomRequest) -> RoomRuntimeInfo:
 
 
 def _update_room_world(room: RoomRuntimeInfo, payload: WorldRequest) -> None:
-    room.world = World(title=payload.title, setting=payload.setting)
-    context = room.turn_manager.context_manager
-    context.world = room.world
-    context.scene = Scene.from_dict({
-        "time": context.scene.get("time", ""),
-        "location": context.scene.get("location", ""),
-        "description": payload.opening_scene,
-    })
-
-    if room.timeline:
-        room.timeline[-1]["content"] = payload.opening_scene
-    else:
-        room.timeline.append({
-            "id": "event_001",
-            "type": "scene",
-            "title": "当前场景",
-            "content": payload.opening_scene,
-            "timestamp": context.scene.get("time", ""),
-        })
+    room.update_world(
+        world=World(title=payload.title, setting=payload.setting),
+        opening_scene=payload.opening_scene,
+    )
 
 def parse_player_id(player_id: str) -> int:
     if player_id.startswith("player_"):

@@ -77,15 +77,18 @@ class SnapshotStore:
 
             rooms.append({
                 "room_id": str(data.get("room_id", room_dir.name)),
+                "room_hash": str(data.get("room_hash", "")),
                 "title": str(world.get("title", "")),
                 "phase": str(data.get("phase", "planning")),
                 "turn_index": int(data.get("turn_index", 1)),
                 "player_count": len(players),
                 "online_player_count": len(online_players),
-                "updated_at": datetime.fromtimestamp(
+                "host_player_id": str(data.get("host_player_id") or ""),
+                "created_at": str(data.get("created_at") or ""),
+                "updated_at": str(data.get("updated_at") or datetime.fromtimestamp(
                     latest_path.stat().st_mtime,
                     timezone.utc,
-                ).isoformat(),
+                ).isoformat()),
             })
 
         return rooms

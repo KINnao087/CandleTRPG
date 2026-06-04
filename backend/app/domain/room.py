@@ -1,5 +1,13 @@
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
+
+from backend.app.domain.action import PlayerAction
+from backend.app.domain.context import Scene, TurnHistory, World
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
@@ -188,3 +196,40 @@ class PlayerInfo:
     @property
     def character_id(self) -> str:
         return f"char_{self.id:03d}"
+
+
+@dataclass
+class Room:
+    room_id: str
+    phase: str
+    world: World
+    opening_scene: str
+    scene: Scene
+    players: dict[int, PlayerInfo] = field(default_factory=dict)
+    actions: dict[int, PlayerAction] = field(default_factory=dict)
+    player_status: dict[int, bool] = field(default_factory=dict)
+    timeline: list[dict[str, Any]] = field(default_factory=list)
+    turn_index: int = 1
+    turn_history: list[TurnHistory] = field(default_factory=list)
+    recent_summary: str = ""
+    next_player_id: int = 1
+    host_player_id: int | None = None
+    room_hash: str = ""
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
+
+    def touch(self) -> None:
+        self.updated_at = utc_now_iso()
+
+    @property
+    def host(self) -> PlayerInfo | None:
+        if self.host_player_id is not None:
+            host = self.players.get(self.host_player_id)
+            if host is not None:
+                return host
+
+        for player in self.players.values():
+            if player.is_host:
+                return player
+
+        return None
