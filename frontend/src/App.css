@@ -466,6 +466,7 @@
   z-index: 20;
   display: grid;
   justify-items: end;
+  pointer-events: none;
 }
 
 .theme-toggle {
@@ -475,6 +476,7 @@
   min-height: 36px;
   padding: 0 14px;
   transform-origin: right center;
+  pointer-events: auto;
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -743,12 +745,18 @@ textarea:focus {
   animation: background-settle 360ms ease-out;
 }
 
+.menu-shell > * {
+  min-width: 0;
+}
+
 .menu-hero {
   max-width: 760px;
   color: var(--text-strong);
 }
 
 .menu-left {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 18px;
   align-content: center;
@@ -774,6 +782,8 @@ textarea:focus {
 }
 
 .menu-form {
+  position: relative;
+  z-index: 2;
   width: 100%;
   justify-self: end;
   animation: block-enter-right 460ms cubic-bezier(0.22, 1, 0.36, 1) 40ms both;

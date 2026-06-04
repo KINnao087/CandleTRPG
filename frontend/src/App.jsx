@@ -433,12 +433,14 @@ function SavedRoomsPanel({ rooms, status, selectedRoomId, onSelectRoom, onRefres
       <div className={isLoading ? "saved-room-list-shell loading" : "saved-room-list-shell"}>
         <div className="saved-room-list">
           {rooms.length > 0 ? (
-            rooms.map((room) => (
+            rooms.map((room) => {
+              const roomKey = room.room_hash || room.room_id;
+              return (
               <button
                 type="button"
-                className={room.room_id === selectedRoomId ? "saved-room-card selected" : "saved-room-card"}
-                key={room.room_id}
-                onClick={() => onSelectRoom(room.room_id)}
+                className={roomKey === selectedRoomId ? "saved-room-card selected" : "saved-room-card"}
+                key={roomKey}
+                onClick={() => onSelectRoom(roomKey)}
                 disabled={isBusy || isLoading}
               >
                 <span className="saved-room-title">{room.title || room.room_id}</span>
@@ -451,7 +453,8 @@ function SavedRoomsPanel({ rooms, status, selectedRoomId, onSelectRoom, onRefres
                 </span>
                 <span className="saved-room-time">{formatRoomUpdatedAt(room.updated_at)}</span>
               </button>
-            ))
+              );
+            })
           ) : (
             <p className="saved-rooms-empty">当前服务器还没有可显示的已保存房间。</p>
           )}
@@ -543,7 +546,7 @@ function MainMenu({
           />
         </Field>
 
-        <Field label="房间 ID">
+        <Field label="房间 Hash">
           <input
             value={roomId}
             onChange={(event) => {
@@ -875,6 +878,7 @@ function App() {
   const [screen, setScreen] = useState("main");
   const [serverUrl, setServerUrl] = useState(DEFAULT_API_BASE_URL || "http://127.0.0.1:8001");
   const [roomId, setRoomId] = useState("");
+  const [roomHash, setRoomHash] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [characterName, setCharacterName] = useState("");
   const [worldTitle, setWorldTitle] = useState("霓虹旧城");
@@ -967,17 +971,19 @@ function App() {
   }, [screen, serverUrl]);
 
   useEffect(() => {
-    if (screen !== "room" || !roomId) {
+    if (screen !== "room" || !roomHash) {
       return undefined;
     }
 
     let isMounted = true;
 
     roomApi
-      .getState(roomId, serverUrl)
+      .getState(roomHash, serverUrl)
       .then((state) => {
         if (!isMounted) return;
         setRoomState((current) => mergeRoomState(current, state));
+        setRoomId((current) => state?.room_id || current);
+        setRoomHash((current) => state?.room_hash || current);
         setNotice("已读取后端房间状态。");
       })
       .catch(() => {
@@ -988,16 +994,16 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [screen, roomId, serverUrl]);
+  }, [screen, roomHash, serverUrl]);
 
   useEffect(() => {
-    if (screen !== "room" || !roomId) {
+    if (screen !== "room" || !roomHash) {
       setSocketStatus("closed");
       return undefined;
     }
 
     const socket = createRoomSocket({
-      roomId,
+      roomId: roomHash,
       playerId,
       serverUrl,
       onStatus: setSocketStatus,
@@ -1015,7 +1021,7 @@ function App() {
     });
 
     return () => socket?.close();
-  }, [screen, roomId, playerId, serverUrl]);
+  }, [screen, roomHash, playerId, serverUrl]);
 
   function validateIdentity() {
     if (!playerName.trim()) {
@@ -1038,25 +1044,27 @@ function App() {
       return;
     }
 
-    const effectiveRoomId = roomId.trim();
-    if (!effectiveRoomId) {
-      setNotice("查找房间需要输入房间 ID。");
+    const effectiveRoomHash = roomHash.trim();
+    if (!effectiveRoomHash) {
+      setNotice("查找房间需要输入房间 Hash。");
       return;
     }
 
     setIsBusy(true);
 
     try {
-      const state = await roomApi.getState(effectiveRoomId, serverUrl);
+      const state = await roomApi.getState(effectiveRoomHash, serverUrl);
+      const resolvedRoomHash = state?.room_hash || effectiveRoomHash;
       setRoomState((current) => mergeRoomState(current, state));
+      setRoomId(state?.room_id || "");
 
-      const joined = await roomApi.joinRoom(effectiveRoomId, {
+      const joined = await roomApi.joinRoom(resolvedRoomHash, {
         player_name: playerName.trim(),
         character_name: characterName.trim(),
         role,
       }, serverUrl);
 
-      setRoomId(effectiveRoomId);
+      setRoomHash(resolvedRoomHash);
       setPlayerId(joined.player_id || joined.id || playerId);
       setRoomState((current) => mergeRoomState(current, joined.room_state));
       setScreen("room");
@@ -1078,10 +1086,10 @@ function App() {
     setScreen("create");
   }
 
-  function selectSavedRoom(nextRoomId) {
-    setSelectedSavedRoomId(nextRoomId);
-    setRoomId(nextRoomId);
-    setNotice(`已选择房间 ${nextRoomId}，填写用户名和角色名后可以加入。`);
+  function selectSavedRoom(nextRoomHash) {
+    setSelectedSavedRoomId(nextRoomHash);
+    setRoomHash(nextRoomHash);
+    setNotice(`已选择房间 ${nextRoomHash}，填写用户名和角色名后可以加入。`);
   }
 
   async function importWorldFile(event) {
@@ -1143,18 +1151,21 @@ function App() {
     }
 
     try {
-      const joined = await roomApi.joinRoom(effectiveRoomId, {
+      const createdRoomHash = nextRoomState?.room_hash || effectiveRoomId;
+      const joined = await roomApi.joinRoom(createdRoomHash, {
         player_name: playerName.trim(),
         character_name: characterName.trim(),
         role: "host",
       }, serverUrl);
 
+      setRoomHash(createdRoomHash);
       setPlayerId(joined.player_id || joined.id || "player_001");
       setRoomState((current) =>
         mergeRoomState(
           mergeRoomState(current, nextRoomState),
           joined.room_state || {
             room_id: effectiveRoomId,
+            room_hash: createdRoomHash,
             world: {
               title: trimmedWorldTitle,
               setting: trimmedWorldSetting,
@@ -1180,7 +1191,7 @@ function App() {
   }
 
   async function leaveRoom() {
-    const leavingRoomId = roomId;
+    const leavingRoomId = roomHash;
     const leavingPlayerId = playerId;
 
     setIsBusy(true);
@@ -1212,7 +1223,7 @@ function App() {
     };
 
     try {
-      const state = await roomApi.submitAction(roomId, payload, serverUrl);
+      const state = await roomApi.submitAction(roomHash, payload, serverUrl);
       setRoomState((current) => mergeRoomState(current, state));
       setNotice("行动已提交。");
     } catch {
@@ -1240,11 +1251,11 @@ function App() {
           action_text: actionText.trim(),
           turn_index: roomState.turn_index,
         };
-        const actionState = await roomApi.submitAction(roomId, actionPayload, serverUrl);
+        const actionState = await roomApi.submitAction(roomHash, actionPayload, serverUrl);
         setRoomState((current) => mergeRoomState(current, actionState));
       }
 
-      const state = await roomApi.updateReady(roomId, { player_id: playerId, ready }, serverUrl);
+      const state = await roomApi.updateReady(roomHash, { player_id: playerId, ready }, serverUrl);
       setRoomState((current) => mergeRoomState(current, state));
       setNotice(ready ? "行动已提交，已标记准备。" : "已取消准备。");
     } catch {
@@ -1259,7 +1270,7 @@ function App() {
 
     try {
       const state = await roomApi.resolveTurn({
-        room_id: roomId,
+        room_id: roomHash,
         host_note: hostNote,
         force: readyCount < roomState.players.length,
       }, serverUrl);
@@ -1278,7 +1289,7 @@ function App() {
 
     try {
       const state = await roomApi.rollback({
-        room_id: roomId,
+        room_id: roomHash,
         turn_index: Math.max(1, roomState.turn_index - 1),
       }, serverUrl);
 
@@ -1296,8 +1307,8 @@ function App() {
       <MainMenu
         serverUrl={serverUrl}
         setServerUrl={setServerUrl}
-        roomId={roomId}
-        setRoomId={setRoomId}
+        roomId={roomHash}
+        setRoomId={setRoomHash}
         playerName={playerName}
         setPlayerName={setPlayerName}
         characterName={characterName}

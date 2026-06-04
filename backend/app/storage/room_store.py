@@ -43,10 +43,12 @@ class RoomRuntimeInfo:
         world: World | None = None,
         room: Room | None = None,
         opening_scene: str = "",
+        room_hash: str = "",
     ):
         context = turn_manager.context_manager
         self.room: Room = room or Room(
             room_id=room_id,
+            room_hash=room_hash or self.build_room_hash(room_id),
             phase=phase,
             world=world or context.world,
             opening_scene=opening_scene or context.scene.description,
@@ -57,6 +59,11 @@ class RoomRuntimeInfo:
         )
         self.turn_manager: TurnManager = turn_manager
         self._sync_runtime_from_room()
+
+    @staticmethod
+    def build_room_hash(room_id: str) -> str:
+        payload = room_id.strip().encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
 
     @property
     def room_id(self) -> str:
@@ -341,9 +348,7 @@ class RoomRuntimeInfo:
             ],
             "recent_summary": getattr(context, "recent_summary", ""),
         }
-        room_hash = self._calculate_room_hash(snapshot)
-        self.room.room_hash = room_hash
-        snapshot["room_hash"] = room_hash
+        snapshot["snapshot_hash"] = self._calculate_snapshot_hash(snapshot)
         return snapshot
 
     @classmethod
@@ -387,9 +392,10 @@ class RoomRuntimeInfo:
             or world_data.get("opening_scene")
             or scene.description
         )
+        room_id = str(data.get("room_id", ""))
         room_data = Room(
-            room_id=str(data.get("room_id", "")),
-            room_hash=str(data.get("room_hash", "")),
+            room_id=room_id,
+            room_hash=str(data.get("room_hash") or cls.build_room_hash(room_id)),
             phase=str(data.get("phase", "planning")),
             world=world,
             opening_scene=opening_scene,
@@ -416,7 +422,7 @@ class RoomRuntimeInfo:
             room_data.player_status.setdefault(player_id, False)
 
         room = cls(
-            room_id=str(data.get("room_id", "")),
+            room_id=room_id,
             phase=str(data.get("phase", "planning")),
             turn_manager=turn_manager,
             world=world,
@@ -467,11 +473,11 @@ class RoomRuntimeInfo:
         return f"player_{player_id:03d}"
 
     @staticmethod
-    def _calculate_room_hash(snapshot: Mapping[str, Any]) -> str:
+    def _calculate_snapshot_hash(snapshot: Mapping[str, Any]) -> str:
         hash_source = {
             key: value
             for key, value in snapshot.items()
-            if key != "room_hash"
+            if key != "snapshot_hash"
         }
         payload = json.dumps(
             hash_source,
@@ -556,7 +562,10 @@ class RoomStore:
         self.rooms: dict[str, RoomRuntimeInfo] = {}
 
     def add_room(self, room: RoomRuntimeInfo) -> None:
-        self.rooms[room.room_id] = room
+        self.rooms[room.room.room_hash] = room
 
-    def get_room(self, room_id: str) -> RoomRuntimeInfo | None:
-        return self.rooms.get(room_id)
+    def get_room(self, room_hash: str) -> RoomRuntimeInfo | None:
+        return self.rooms.get(room_hash)
+
+    def has_room_hash(self, room_hash: str) -> bool:
+        return room_hash in self.rooms

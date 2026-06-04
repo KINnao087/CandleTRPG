@@ -11,23 +11,33 @@ class SnapshotStore:
 
     def save_snapshot(self, room: RoomRuntimeInfo) -> Path:
         turn_index = self._snapshot_turn_index(room)
-        path = self._snapshot_path(room.room_id, turn_index)
+        path = self._snapshot_path(room.room.room_hash, turn_index)
         self._write_snapshot(path, room.to_snapshot())
         return path
 
     def save_latest(self, room: RoomRuntimeInfo) -> Path:
-        path = self._latest_path(room.room_id)
+        path = self._latest_path(room.room.room_hash)
         self._write_snapshot(path, room.to_snapshot())
         return path
 
-    def load_latest(self, room_id: str) -> RoomRuntimeInfo | None:
-        return self._load_snapshot(self._latest_path(room_id))
+    def load_latest(self, room_hash: str) -> RoomRuntimeInfo | None:
+        room_dir = self._find_room_dir(room_hash)
+        if room_dir is None:
+            return None
+        return self._load_snapshot(room_dir / "snapshots" / "latest.json")
 
-    def load_turn(self, room_id: str, turn_index: int) -> RoomRuntimeInfo | None:
-        return self._load_snapshot(self._snapshot_path(room_id, turn_index))
+    def load_turn(self, room_hash: str, turn_index: int) -> RoomRuntimeInfo | None:
+        room_dir = self._find_room_dir(room_hash)
+        if room_dir is None:
+            return None
+        return self._load_snapshot(room_dir / "snapshots" / f"turn_{turn_index:03d}.json")
 
-    def list_snapshots(self, room_id: str) -> list[int]:
-        snapshots_dir = self._snapshots_dir(room_id)
+    def list_snapshots(self, room_hash: str) -> list[int]:
+        room_dir = self._find_room_dir(room_hash)
+        if room_dir is None:
+            return []
+
+        snapshots_dir = room_dir / "snapshots"
         if not snapshots_dir.exists():
             return []
 
@@ -75,9 +85,10 @@ class SnapshotStore:
             if not isinstance(world, dict):
                 world = {}
 
+            room_id = str(data.get("room_id", room_dir.name))
             rooms.append({
-                "room_id": str(data.get("room_id", room_dir.name)),
-                "room_hash": str(data.get("room_hash", "")),
+                "room_id": room_id,
+                "room_hash": str(data.get("room_hash") or RoomRuntimeInfo.build_room_hash(room_id)),
                 "title": str(world.get("title", "")),
                 "phase": str(data.get("phase", "planning")),
                 "turn_index": int(data.get("turn_index", 1)),
@@ -92,6 +103,9 @@ class SnapshotStore:
             })
 
         return rooms
+
+    def has_room_hash(self, room_hash: str) -> bool:
+        return self._find_room_dir(room_hash) is not None
 
     def _write_snapshot(self, path: Path, data: dict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -113,14 +127,45 @@ class SnapshotStore:
     def _snapshot_turn_index(self, room: RoomRuntimeInfo) -> int:
         return max(0, room.turn_manager.turn_index - 1)
 
-    def _room_dir(self, room_id: str) -> Path:
-        return self.base_dir / room_id
+    def _find_room_dir(self, room_hash: str) -> Path | None:
+        direct_dir = self._room_dir(room_hash)
+        if (direct_dir / "snapshots" / "latest.json").exists():
+            return direct_dir
 
-    def _snapshots_dir(self, room_id: str) -> Path:
-        return self._room_dir(room_id) / "snapshots"
+        if not self.base_dir.exists():
+            return None
 
-    def _snapshot_path(self, room_id: str, turn_index: int) -> Path:
-        return self._snapshots_dir(room_id) / f"turn_{turn_index:03d}.json"
+        for room_dir in self.base_dir.iterdir():
+            if not room_dir.is_dir():
+                continue
 
-    def _latest_path(self, room_id: str) -> Path:
-        return self._snapshots_dir(room_id) / "latest.json"
+            latest_path = room_dir / "snapshots" / "latest.json"
+            if not latest_path.exists():
+                continue
+
+            try:
+                data = json.loads(latest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+
+            if not isinstance(data, dict):
+                continue
+
+            stored_room_id = str(data.get("room_id", room_dir.name))
+            stored_room_hash = str(data.get("room_hash") or RoomRuntimeInfo.build_room_hash(stored_room_id))
+            if stored_room_hash == room_hash:
+                return room_dir
+
+        return None
+
+    def _room_dir(self, room_hash: str) -> Path:
+        return self.base_dir / room_hash
+
+    def _snapshots_dir(self, room_hash: str) -> Path:
+        return self._room_dir(room_hash) / "snapshots"
+
+    def _snapshot_path(self, room_hash: str, turn_index: int) -> Path:
+        return self._snapshots_dir(room_hash) / f"turn_{turn_index:03d}.json"
+
+    def _latest_path(self, room_hash: str) -> Path:
+        return self._snapshots_dir(room_hash) / "latest.json"

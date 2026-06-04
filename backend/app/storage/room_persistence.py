@@ -18,6 +18,7 @@ class RoomPersistence:
         payload: dict[str, Any],
     ) -> dict:
         return self.event_log_store.append(
+            room_hash=room.room.room_hash,
             room_id=room.room_id,
             event_type=event_type,
             payload=payload,
@@ -35,14 +36,17 @@ class RoomPersistence:
         self.snapshot_store.save_snapshot(room)
         self.snapshot_store.save_latest(room)
 
-    def load_latest_room(self, room_id: str) -> RoomRuntimeInfo | None:
-        return self.snapshot_store.load_latest(room_id)
+    def load_latest_room(self, room_hash: str) -> RoomRuntimeInfo | None:
+        return self.snapshot_store.load_latest(room_hash)
 
-    def rollback_room(self, room_id: str, turn_index: int) -> RoomRuntimeInfo | None:
-        return self.snapshot_store.load_turn(room_id, turn_index)
+    def rollback_room(self, room_hash: str, turn_index: int) -> RoomRuntimeInfo | None:
+        return self.snapshot_store.load_turn(room_hash, turn_index)
 
     def list_saved_rooms(self) -> list[dict]:
         return self.snapshot_store.list_rooms()
+
+    def has_room_hash(self, room_hash: str) -> bool:
+        return self.snapshot_store.has_room_hash(room_hash)
 
     def _event_turn_index(self, room: RoomRuntimeInfo, event_type: str) -> int:
         if event_type == "room_created":

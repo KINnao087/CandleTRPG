@@ -67,30 +67,34 @@ connection_manager = RoomConnectionManager()
 #     ]
 
 
-def _get_room(room_id: str) -> RoomRuntimeInfo | None:
+def _get_room(room_hash: str) -> RoomRuntimeInfo | None:
     """获取一个房间的管理器"""
-    return room_store.get_room(room_id)
+    return room_store.get_room(room_hash)
 
 
-def _get_or_load_room(room_id: str) -> RoomRuntimeInfo | None:
-    room = _get_room(room_id)
+def _get_or_load_room(room_hash: str) -> RoomRuntimeInfo | None:
+    room = _get_room(room_hash)
     if room is not None:
         return room
 
-    room = room_persistence.load_latest_room(room_id)
+    room = room_persistence.load_latest_room(room_hash)
     if room is not None:
         room_store.add_room(room)
 
     return room
 
 
+def room_hash_exists(room_hash: str) -> bool:
+    return room_store.has_room_hash(room_hash) or room_persistence.has_room_hash(room_hash)
+
+
 async def _broadcast_room_state(room: RoomRuntimeInfo) -> dict:
     room_state = room.to_room_state()
-    await connection_manager.broadcast_room_state(room.room_id, room_state)
+    await connection_manager.broadcast_room_state(room.room.room_hash, room_state)
     return room_state
 
 
-def _create_room(room_id: str, payload: CreateRoomRequest) -> RoomRuntimeInfo:
+def _create_room(room_id: str, room_hash: str, payload: CreateRoomRequest) -> RoomRuntimeInfo:
     world = World(title=payload.world.title, setting=payload.world.setting)
     scene = Scene.from_dict({
         "time": "",
@@ -114,6 +118,7 @@ def _create_room(room_id: str, payload: CreateRoomRequest) -> RoomRuntimeInfo:
         )),
         world=world,
         opening_scene=payload.world.opening_scene,
+        room_hash=room_hash,
     )
     room_runtime_info.add_player(host)
     room_runtime_info.timeline.append({
@@ -146,12 +151,16 @@ def health():
 #创建房间，如果存在就返回错误
 @app.post("/api/rooms/{room_id}")
 async def create_room(room_id: str, payload: CreateRoomRequest):
-    room = _get_or_load_room(room_id)
+    room_hash = RoomRuntimeInfo.build_room_hash(room_id)
+    room = _get_or_load_room(room_hash)
 
     if room is not None:
         raise HTTPException(status_code=409, detail="Room already exists")
 
-    room = _create_room(room_id, payload)
+    if room_hash_exists(room_hash):
+        raise HTTPException(status_code=409, detail="Room hash already exists")
+
+    room = _create_room(room_id, room_hash, payload)
     room_store.add_room(room)
     room_persistence.append_event(room, "room_created", {
         "host_name": payload.host_name,
@@ -174,9 +183,9 @@ async def create_room(room_id: str, payload: CreateRoomRequest):
     }
 
 
-@app.post("/api/rooms/{room_id}/world")
-async def import_world(room_id: str, payload: WorldRequest):
-    room = _get_or_load_room(room_id)
+@app.post("/api/rooms/{room_hash}/world")
+async def import_world(room_hash: str, payload: WorldRequest):
+    room = _get_or_load_room(room_hash)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -192,17 +201,17 @@ async def import_world(room_id: str, payload: WorldRequest):
     }
 
 
-@app.get("/api/rooms/{room_id}/state")
-def get_room_state(room_id: str):
-    room = _get_or_load_room(room_id)
+@app.get("/api/rooms/{room_hash}/state")
+def get_room_state(room_hash: str):
+    room = _get_or_load_room(room_hash)
     if room is None:
         return None
     return room.to_room_state()
 
 
-@app.post("/api/rooms/{room_id}/join")
-async def join_room(room_id: str, payload: JoinRequest):
-    room = _get_or_load_room(room_id)
+@app.post("/api/rooms/{room_hash}/join")
+async def join_room(room_hash: str, payload: JoinRequest):
+    room = _get_or_load_room(room_hash)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -253,7 +262,6 @@ async def join_room(room_id: str, payload: JoinRequest):
             is_host=payload.role == "host",
         )
     )
-    room.turn_manager.context_manager.characters.append(player)
 
     room_persistence.append_event(room, "player_joined", {
         "player_id": RoomRuntimeInfo._format_player_id(player.id),
@@ -269,9 +277,9 @@ async def join_room(room_id: str, payload: JoinRequest):
     }
 
 
-@app.post("/api/rooms/{room_id}/leave")
-async def leave_room(room_id: str, payload: LeaveRequest):
-    room = _get_or_load_room(room_id)
+@app.post("/api/rooms/{room_hash}/leave")
+async def leave_room(room_hash: str, payload: LeaveRequest):
+    room = _get_or_load_room(room_hash)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -289,9 +297,9 @@ async def leave_room(room_id: str, payload: LeaveRequest):
     return await _broadcast_room_state(room)
 
 
-@app.post("/api/rooms/{room_id}/actions")
-async def player_action(room_id: str, payload: PlayerActionRequest):
-    room = _get_or_load_room(room_id)
+@app.post("/api/rooms/{room_hash}/actions")
+async def player_action(room_hash: str, payload: PlayerActionRequest):
+    room = _get_or_load_room(room_hash)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -318,9 +326,9 @@ async def player_action(room_id: str, payload: PlayerActionRequest):
     return await _broadcast_room_state(room)
 
 
-@app.post("/api/rooms/{room_id}/ready")
-async def player_ready(room_id: str, payload: PlayerReadyRequest):
-    room = _get_or_load_room(room_id)
+@app.post("/api/rooms/{room_hash}/ready")
+async def player_ready(room_hash: str, payload: PlayerReadyRequest):
+    room = _get_or_load_room(room_hash)
     if room is None:
         raise HTTPException(status_code=404, detail="room not found")
 
@@ -387,15 +395,16 @@ def list_saved_rooms():
     return {"rooms":room_persistence.list_saved_rooms()}
 
 from fastapi import WebSocket, WebSocketDisconnect
-@app.websocket("/ws/rooms/{room_id}")
-async def room_socket(websocket: WebSocket, room_id: str, player_id: str | None = None):
-    await connection_manager.connect(room_id, websocket)
+@app.websocket("/ws/rooms/{room_hash}")
+async def room_socket(websocket: WebSocket, room_hash: str, player_id: str | None = None):
+    await connection_manager.connect(room_hash, websocket)
 
-    room = _get_or_load_room(room_id)
+    room = _get_or_load_room(room_hash)
     if room is not None:
         await websocket.send_json({
             "type": "room_state",
-            "room_id": room_id,
+            "room_id": room.room_id,
+            "room_hash": room.room.room_hash,
             "payload": room.to_room_state(),
         })
 
@@ -403,4 +412,4 @@ async def room_socket(websocket: WebSocket, room_id: str, player_id: str | None 
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        connection_manager.disconnect(room_id, websocket)
+        connection_manager.disconnect(room_hash, websocket)

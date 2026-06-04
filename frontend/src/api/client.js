@@ -50,44 +50,44 @@ export const roomApi = {
     });
   },
 
-  getState(roomId, serverUrl) {
-    return request(`/api/rooms/${encodeURIComponent(roomId)}/state`, { serverUrl });
+  getState(roomHash, serverUrl) {
+    return request(`/api/rooms/${encodeURIComponent(roomHash)}/state`, { serverUrl });
   },
 
-  importWorld(roomId, payload, serverUrl) {
-    return request(`/api/rooms/${encodeURIComponent(roomId)}/world`, {
+  importWorld(roomHash, payload, serverUrl) {
+    return request(`/api/rooms/${encodeURIComponent(roomHash)}/world`, {
       method: "POST",
       body: JSON.stringify(payload),
       serverUrl,
     });
   },
 
-  joinRoom(roomId, payload, serverUrl) {
-    return request(`/api/rooms/${encodeURIComponent(roomId)}/join`, {
+  joinRoom(roomHash, payload, serverUrl) {
+    return request(`/api/rooms/${encodeURIComponent(roomHash)}/join`, {
       method: "POST",
       body: JSON.stringify(payload),
       serverUrl,
     });
   },
 
-  leaveRoom(roomId, payload, serverUrl) {
-    return request(`/api/rooms/${encodeURIComponent(roomId)}/leave`, {
+  leaveRoom(roomHash, payload, serverUrl) {
+    return request(`/api/rooms/${encodeURIComponent(roomHash)}/leave`, {
       method: "POST",
       body: JSON.stringify(payload),
       serverUrl,
     });
   },
 
-  submitAction(roomId, payload, serverUrl) {
-    return request(`/api/rooms/${encodeURIComponent(roomId)}/actions`, {
+  submitAction(roomHash, payload, serverUrl) {
+    return request(`/api/rooms/${encodeURIComponent(roomHash)}/actions`, {
       method: "POST",
       body: JSON.stringify(payload),
       serverUrl,
     });
   },
 
-  updateReady(roomId, payload, serverUrl) {
-    return request(`/api/rooms/${encodeURIComponent(roomId)}/ready`, {
+  updateReady(roomHash, payload, serverUrl) {
+    return request(`/api/rooms/${encodeURIComponent(roomHash)}/ready`, {
       method: "POST",
       body: JSON.stringify(payload),
       serverUrl,
