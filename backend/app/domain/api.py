@@ -32,10 +32,10 @@ class PlayerReadyRequest(BaseModel):
     ready: bool
 
 class HostResolveRequest(BaseModel):
-    room_id: str
+    room_hash: str
     host_note: str
     force: bool #是否在未全员准备时强制结算
 
 class HostRollBackRequest(BaseModel):
-    room_id: str
+    room_hash: str
     turn_index: int

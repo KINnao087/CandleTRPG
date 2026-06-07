@@ -263,7 +263,7 @@ POST /api/host/resolve-turn
 
 ```json
 {
-  "room_id": "room_001",
+  "room_hash": "sha256...",
   "host_note": "优先处理潜行失败风险",
   "force": false
 }
@@ -271,7 +271,7 @@ POST /api/host/resolve-turn
 
 字段说明：
 
-- `room_id`：要结算的房间。
+- `room_hash`：要结算房间的哈希标识。
 - `host_note`：房主给 AI 或结算逻辑的补充说明，可为空字符串。
 - `force`：是否在未全员准备时强制结算。
 
@@ -295,7 +295,7 @@ POST /api/host/rollback
 
 ```json
 {
-  "room_id": "room_001",
+  "room_hash": "sha256...",
   "turn_index": 1
 }
 ```

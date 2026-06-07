@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from starlette.middleware.cors import CORSMiddleware
 
+from backend.app.ai import resolve_turn_graph
+from backend.app.ai.resolve_turn_graph import build_resolve_turn_graph
 from backend.app.domain.action import PlayerAction
 from backend.app.domain.api import (
     HostResolveRequest,
@@ -13,6 +15,7 @@ from backend.app.domain.api import (
     WorldRequest,
 )
 from backend.app.domain.context import Scene, World
+from backend.app.domain.error import RoomNotFoundError
 from backend.app.domain.room import PlayerInfo
 from backend.app.services.context_manager import ContextManager
 from backend.app.services.turn_manager import TurnManager
@@ -348,38 +351,58 @@ async def player_ready(room_hash: str, payload: PlayerReadyRequest):
     return await _broadcast_room_state(room)
 
 
+rt_graph = build_resolve_turn_graph(
+    room_persistence=room_persistence,
+    room_store=room_store,
+)
 @app.post("/api/host/resolve-turn")
 async def resolve_turn(payload: HostResolveRequest):
-    room = _get_or_load_room(payload.room_id)
+    try:
+        result = rt_graph.invoke({
+            "room_hash": payload.room_hash,
+            "host_note": payload.host_note,
+            "force": payload.force,
+            "workflow_status": "loading",
+        })
+    except RoomNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    status = result["workflow_status"]
+
+    if status == "rejected":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "当前回合无法结算",
+                "errors": result.get("validation_errors", []),
+            },
+        )
+
+    if status == "failed":
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "回合结算失败",
+                "errors": result.get("validation_errors", []),
+            },
+        )
+
+    room = room_store.get_room(payload.room_hash)
     if room is None:
-        raise HTTPException(status_code=404, detail="room not found")
+        raise HTTPException(
+            status_code=404,
+            detail="room not found",
+        )
 
-    if payload.force:
-        room.resolve_turn(host_note=payload.host_note, force=True)
-    else:
-        resolved = room.try_resolve_turn(host_note=payload.host_note)
-        if not resolved:
-            raise HTTPException(status_code=409, detail="not all players are ready")
-
-    context = room.turn_manager.context_manager
-    latest_history = context.turn_history[-1] if context.turn_history else None
-    room_persistence.append_event(room, "turn_resolved", {
-        "timeline_event": room.timeline[0] if room.timeline else None,
-        "scene": {
-            "time": context.scene.time,
-            "location": context.scene.location,
-            "description": context.scene.description,
-        },
-        "character_updates": latest_history.character_updates if latest_history else [],
-        "narration": latest_history.narration if latest_history else "",
-    })
-    room_persistence.save_turn_snapshot(room)
     return await _broadcast_room_state(room)
 
 
 @app.post("/api/host/rollback")
 async def rollback(payload: HostRollBackRequest):
-    room = room_persistence.rollback_room(payload.room_id, payload.turn_index)
+    room = room_persistence.rollback_room(payload.room_hash, payload.turn_index)
     if room is None:
         raise HTTPException(status_code=404, detail="snapshot not found")
 

@@ -1270,7 +1270,7 @@ function App() {
 
     try {
       const state = await roomApi.resolveTurn({
-        room_id: roomHash,
+        room_hash: roomHash,
         host_note: hostNote,
         force: readyCount < roomState.players.length,
       }, serverUrl);
@@ -1289,7 +1289,7 @@ function App() {
 
     try {
       const state = await roomApi.rollback({
-        room_id: roomHash,
+        room_hash: roomHash,
         turn_index: Math.max(1, roomState.turn_index - 1),
       }, serverUrl);
 
