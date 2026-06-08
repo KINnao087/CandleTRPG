@@ -2,6 +2,8 @@ import hashlib
 import json
 from typing import Any, Mapping
 
+from typing_extensions import deprecated
+
 from backend.app.domain.action import PlayerAction
 from backend.app.domain.context import Scene, World
 from backend.app.domain.room import PlayerInfo, Room
@@ -253,6 +255,7 @@ class RoomRuntimeInfo:
         self.player_status[player_id] = status
         self.room.touch()
 
+    @deprecated("被resolve_turn_graph替代")
     def try_resolve_turn(self, host_note: str = "") -> bool:
         for player in self.get_online_players():
             if not self.player_status.get(player.id, False):
@@ -261,6 +264,7 @@ class RoomRuntimeInfo:
         self.resolve_turn(host_note=host_note)
         return True
 
+    @deprecated("被resolve_turn_graph替代")
     def resolve_turn(self, host_note: str = "", force: bool = False) -> None:
         self.phase = "resolving"
         turn_index = self.turn_manager.turn_index
@@ -286,6 +290,7 @@ class RoomRuntimeInfo:
         self.phase = "planning"
         self._sync_room_from_runtime(touch=True)
 
+    @deprecated("被resolve_turn_graph替代")
     def _build_turn_actions(self, force: bool) -> list[PlayerAction]:
         actions = []
         for player in self.get_online_players():

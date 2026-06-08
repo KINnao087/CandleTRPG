@@ -1064,8 +1064,14 @@ function App() {
         role,
       }, serverUrl);
 
+      const joinedPlayerId = joined.player_id || joined.id || playerId;
+      const joinedPlayer = joined.room_state?.players?.find(
+        (player) => player.id === joinedPlayerId,
+      );
+
       setRoomHash(resolvedRoomHash);
-      setPlayerId(joined.player_id || joined.id || playerId);
+      setPlayerId(joinedPlayerId);
+      setRole(joinedPlayer?.role || role);
       setRoomState((current) => mergeRoomState(current, joined.room_state));
       setScreen("room");
       setNotice("已加入房间。");
